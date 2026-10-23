@@ -13,7 +13,7 @@ date and notes as work lands. Last updated: 2026-10-23
 | Decisions | 6 | 6 | ✅ |
 | Phase 0 — Git setup | 8 | 8 | ✅ |
 | Phase 0 — Services & credentials | 1 | 3 | 🟡 |
-| Upstream contribution | 1 | 6 | 🟡 |
+| Upstream contribution | 2 | 6 | 🟡 |
 | Phase 1 — Detection & strings | 0 | 9 | ⬜ |
 | Phase 2 — Snapshot, checks, CLI | 0 | 11 | ⬜ |
 | Phase 3 — Source ZIP | 0 | 4 | ⬜ |
@@ -66,7 +66,7 @@ date and notes as work lands. Last updated: 2026-10-23
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| U1 | Feature-request issue upstream | ⬜ | | Before first PR |
+| U1 | Feature-request issue upstream | ✅ | 2026-10-23 | MobSF#2722, assigned `ajinabraham`. Asks: core fit, external parser (blutter) OK, report section vs folded, code layout. Wait for answers before first Flutter PR |
 | U2 | Small focused PRs from `upstream/master` | 🟡 | 2026-10-23 | First: MobSF#2721 env flag parsing (`fix/env-bool-flags`). Fork CI run on draft #3 (closed) |
 | U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | 🟡 | 2026-10-23 | #2721 uses PR template; lint + tests pass. Security-relevant fixes: decide public PR vs private advisory (SECURITY.md) before pushing to fork |
 | U4 | GPL-3.0-compatible dependencies only | ✅ | 2026-10-23 | blutter MIT ✅, reFlutter GPL-3.0 ✅, darter AGPL-3.0 ⚠️ (allowed via GPLv3 §13, network clause applies; old Dart only), Doldrums and Guardsquare flutter-re-demo have no license ❌ (reference only). Recommend blutter for F7 |
@@ -150,4 +150,4 @@ date and notes as work lands. Last updated: 2026-10-23
 | 2026-10-23 | Planning docs committed (72fd4cb6, not pushed); `master` protected; Issues on; CODEOWNERS added |
 | 2026-10-23 | PR #1 merged, CI green (G5). Secret scan + upstream sync + Flutter package scaffolds (G4) on `feat/flutter-ci-secrets` (PR #2). U4 license review done. S3 env docs; fixed `.env.example` VT flags (`0` enabled VT upload) |
 | 2026-10-23 | Q5 confirmed; weekly upstream sync workflow; S1 secret handling + gitleaks workflow |
-| 2026-10-23 | PR #2 merged. Upstream sync tested. Opened MobSF#2721 (env flag parsing, first upstream PR) |
+| 2026-10-23 | PR #2 merged. Upstream sync tested. Opened MobSF#2721 (env flag parsing, first upstream PR) and feature request MobSF#2722 (U1) |
