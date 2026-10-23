@@ -51,7 +51,7 @@ date and notes as work lands. Last updated: 2026-10-23
 | G7 | Issues enabled on fork | ✅ | 2026-10-23 | |
 | G8 | `.github/CODEOWNERS` → `@captainrogers69` | ✅ | 2026-10-23 | Committed (44752454). Fork-only (U5) |
 | G4 | Isolated Flutter package layout | ⬜ | | `StaticAnalyzer/views/flutter/`, `frida_scripts/flutter/` |
-| G5 | CI: lint, tests, Docker build on PR | 🟡 | 2026-10-23 | Workflows enabled on fork; publish workflows (docker-latest, docker-release, python-publish) disabled; first run on PR #1 pending |
+| G5 | CI: lint, tests, Docker build on PR | ✅ | 2026-10-23 | `MobSF tests` (ubuntu/macos/windows × 3.12/3.13) + `buildx` green on PR #1 and on `master` after merge. Publish workflows disabled. CodeQL off (GitHub disables it on forks) |
 | G6 | Repo visibility | ✅ | 2026-10-23 | Public fork |
 
 ## Phase 0 — Services & credentials
@@ -148,4 +148,5 @@ date and notes as work lands. Last updated: 2026-10-23
 | 2026-10-23 | Recorded Q1–Q6 decisions, added upstream contribution section (U1–U6) and F29 |
 | 2026-10-23 | `upstream` remote fetched; branch `feat/flutter-planning` created |
 | 2026-10-23 | Planning docs committed (72fd4cb6, not pushed); `master` protected; Issues on; CODEOWNERS added |
+| 2026-10-23 | PR #1 merged, CI green (G5). Secret scan + upstream sync on `feat/flutter-ci-secrets` |
 | 2026-10-23 | Q5 confirmed; weekly upstream sync workflow; S1 secret handling + gitleaks workflow |
