@@ -46,7 +46,7 @@ date and notes as work lands. Last updated: 2026-10-23
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
 | G1 | `origin` = our fork | ✅ | 2026-10-23 | `captainrogers69/Mobile-Security-Framework-MobSF` |
-| G2 | `upstream` remote and merge cadence | ✅ | 2026-10-23 | Weekly (Mon 03:00 UTC) via `.github/workflows/upstream-sync.yml` → opens PR `sync/upstream` → `master`. Needs secret `SYNC_TOKEN` for CI to run on it |
+| G2 | `upstream` remote and merge cadence | ✅ | 2026-10-23 | Weekly (Mon 03:00 UTC) via `.github/workflows/upstream-sync.yml` → opens PR `sync/upstream` → `master`. `SYNC_TOKEN` set; manual run passed ("Already up to date"). PR-opening path untested until upstream moves |
 | G3 | Branching model and `master` protection | ✅ | 2026-10-23 | `feat/flutter-*` branches. `master`: PR required (0 approvals), checks `build (ubuntu-22.04, 3.12/3.13)` + `buildx`, up-to-date branch, conversations resolved, no force-push/delete, admin bypass on for upstream syncs |
 | G7 | Issues enabled on fork | ✅ | 2026-10-23 | |
 | G8 | `.github/CODEOWNERS` → `@captainrogers69` | ✅ | 2026-10-23 | Committed (44752454). Fork-only (U5) |
@@ -58,7 +58,7 @@ date and notes as work lands. Last updated: 2026-10-23
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| S1 | `.env` + CI secrets, gitleaks in CI | 🟡 | 2026-10-23 | `.env` gitignored, `.env.example` added, `.github/workflows/secret-scan.yml` (gitleaks 8.21.2, sha256-pinned, scans new commits only — upstream history has 33 old findings). Not committed; add `gitleaks` to required checks after first run |
+| S1 | `.env` + CI secrets, gitleaks in CI | 🟡 | 2026-10-23 | `.env` gitignored, `.env.example` added, `.github/workflows/secret-scan.yml` (gitleaks 8.21.2, sha256-pinned, scans new commits only; upstream history has 33 old findings). Passing on PRs. TODO: add `gitleaks` to required checks on `master` |
 | S2 | Credentials inventory provisioned | ⬜ | | GitHub, registry, VT key, Django secret, DB |
 | S3 | `MOBSF_*` env vars documented | ✅ | 2026-10-23 | `docs/environment.md`: every var MobSF reads, defaults, and parse rule (`bool(getenv)` flags like `MOBSF_VT_UPLOAD` are on for `0`). Upstream PR candidate |
 
@@ -67,10 +67,10 @@ date and notes as work lands. Last updated: 2026-10-23
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
 | U1 | Feature-request issue upstream | ⬜ | | Before first PR |
-| U2 | Small focused PRs from `upstream/master` | ⬜ | | |
-| U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | ⬜ | | |
+| U2 | Small focused PRs from `upstream/master` | 🟡 | 2026-10-23 | First: MobSF#2721 env flag parsing (`fix/env-bool-flags`). Fork CI run on draft #3 (closed) |
+| U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | 🟡 | 2026-10-23 | #2721 uses PR template; lint + tests pass. Security-relevant fixes: decide public PR vs private advisory (SECURITY.md) before pushing to fork |
 | U4 | GPL-3.0-compatible dependencies only | ✅ | 2026-10-23 | blutter MIT ✅, reFlutter GPL-3.0 ✅, darter AGPL-3.0 ⚠️ (allowed via GPLv3 §13, network clause applies; old Dart only), Doldrums and Guardsquare flutter-re-demo have no license ❌ (reference only). Recommend blutter for F7 |
-| U5 | Fork-only files kept out of upstream PRs | ⬜ | | `requirements.md`, `progress.md` |
+| U5 | Fork-only files kept out of upstream PRs | 🟡 | 2026-10-23 | Upstream branches cut from `upstream/master`; #2721 has no fork-only files |
 | U6 | No breaking output/API/DB changes | ⬜ | | |
 
 ## Phase 1 — Detection, fingerprinting, strings, reporting
@@ -150,3 +150,4 @@ date and notes as work lands. Last updated: 2026-10-23
 | 2026-10-23 | Planning docs committed (72fd4cb6, not pushed); `master` protected; Issues on; CODEOWNERS added |
 | 2026-10-23 | PR #1 merged, CI green (G5). Secret scan + upstream sync + Flutter package scaffolds (G4) on `feat/flutter-ci-secrets` (PR #2). U4 license review done. S3 env docs; fixed `.env.example` VT flags (`0` enabled VT upload) |
 | 2026-10-23 | Q5 confirmed; weekly upstream sync workflow; S1 secret handling + gitleaks workflow |
+| 2026-10-23 | PR #2 merged. Upstream sync tested. Opened MobSF#2721 (env flag parsing, first upstream PR) |
