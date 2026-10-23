@@ -80,3 +80,7 @@ mobsf/StaticAnalyzer/migrations
 mobsf/MobSF/windows_vm_priv_key.asc
 mobsf/setup_done.txt
 TODO.md
+# Local secrets (fork). Copy .env.example to .env
+.env
+.env.*
+!.env.example
