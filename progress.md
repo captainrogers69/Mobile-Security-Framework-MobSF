@@ -11,7 +11,7 @@ date and notes as work lands. Last updated: 2026-10-23
 |---|---|---|---|
 | Planning | 2 | 2 | ✅ |
 | Decisions | 6 | 6 | ✅ |
-| Phase 0 — Git setup | 7 | 8 | 🟡 |
+| Phase 0 — Git setup | 8 | 8 | ✅ |
 | Phase 0 — Services & credentials | 0 | 3 | ⬜ |
 | Upstream contribution | 0 | 6 | ⬜ |
 | Phase 1 — Detection & strings | 0 | 9 | ⬜ |
@@ -50,7 +50,7 @@ date and notes as work lands. Last updated: 2026-10-23
 | G3 | Branching model and `master` protection | ✅ | 2026-10-23 | `feat/flutter-*` branches. `master`: PR required (0 approvals), checks `build (ubuntu-22.04, 3.12/3.13)` + `buildx`, up-to-date branch, conversations resolved, no force-push/delete, admin bypass on for upstream syncs |
 | G7 | Issues enabled on fork | ✅ | 2026-10-23 | |
 | G8 | `.github/CODEOWNERS` → `@captainrogers69` | ✅ | 2026-10-23 | Committed (44752454). Fork-only (U5) |
-| G4 | Isolated Flutter package layout | ⬜ | | `StaticAnalyzer/views/flutter/`, `frida_scripts/flutter/` |
+| G4 | Isolated Flutter package layout | ✅ | 2026-10-23 | `mobsf/StaticAnalyzer/views/flutter/`, `mobsf/DynamicAnalyzer/tools/frida_scripts/flutter/` (empty scaffolds) |
 | G5 | CI: lint, tests, Docker build on PR | ✅ | 2026-10-23 | `MobSF tests` (ubuntu/macos/windows × 3.12/3.13) + `buildx` green on PR #1 and on `master` after merge. Publish workflows disabled. CodeQL off (GitHub disables it on forks) |
 | G6 | Repo visibility | ✅ | 2026-10-23 | Public fork |
 
@@ -148,5 +148,5 @@ date and notes as work lands. Last updated: 2026-10-23
 | 2026-10-23 | Recorded Q1–Q6 decisions, added upstream contribution section (U1–U6) and F29 |
 | 2026-10-23 | `upstream` remote fetched; branch `feat/flutter-planning` created |
 | 2026-10-23 | Planning docs committed (72fd4cb6, not pushed); `master` protected; Issues on; CODEOWNERS added |
-| 2026-10-23 | PR #1 merged, CI green (G5). Secret scan + upstream sync on `feat/flutter-ci-secrets` |
+| 2026-10-23 | PR #1 merged, CI green (G5). Secret scan + upstream sync + Flutter package scaffolds (G4) on `feat/flutter-ci-secrets` (PR #2) |
 | 2026-10-23 | Q5 confirmed; weekly upstream sync workflow; S1 secret handling + gitleaks workflow |
