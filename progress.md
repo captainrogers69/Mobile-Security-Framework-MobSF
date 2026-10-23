@@ -12,8 +12,8 @@ date and notes as work lands. Last updated: 2026-10-23
 | Planning | 2 | 2 | ✅ |
 | Decisions | 6 | 6 | ✅ |
 | Phase 0 — Git setup | 8 | 8 | ✅ |
-| Phase 0 — Services & credentials | 0 | 3 | ⬜ |
-| Upstream contribution | 0 | 6 | ⬜ |
+| Phase 0 — Services & credentials | 1 | 3 | 🟡 |
+| Upstream contribution | 1 | 6 | 🟡 |
 | Phase 1 — Detection & strings | 0 | 9 | ⬜ |
 | Phase 2 — Snapshot, checks, CLI | 0 | 11 | ⬜ |
 | Phase 3 — Source ZIP | 0 | 4 | ⬜ |
@@ -60,7 +60,7 @@ date and notes as work lands. Last updated: 2026-10-23
 |---|---|---|---|---|
 | S1 | `.env` + CI secrets, gitleaks in CI | 🟡 | 2026-10-23 | `.env` gitignored, `.env.example` added, `.github/workflows/secret-scan.yml` (gitleaks 8.21.2, sha256-pinned, scans new commits only — upstream history has 33 old findings). Not committed; add `gitleaks` to required checks after first run |
 | S2 | Credentials inventory provisioned | ⬜ | | GitHub, registry, VT key, Django secret, DB |
-| S3 | `MOBSF_*` env vars documented | ⬜ | | |
+| S3 | `MOBSF_*` env vars documented | ✅ | 2026-10-23 | `docs/environment.md`: every var MobSF reads, defaults, and parse rule (`bool(getenv)` flags like `MOBSF_VT_UPLOAD` are on for `0`). Upstream PR candidate |
 
 ## Upstream contribution
 
@@ -69,7 +69,7 @@ date and notes as work lands. Last updated: 2026-10-23
 | U1 | Feature-request issue upstream | ⬜ | | Before first PR |
 | U2 | Small focused PRs from `upstream/master` | ⬜ | | |
 | U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | ⬜ | | |
-| U4 | GPL-3.0-compatible dependencies only | ⬜ | | Check blutter/reFlutter/Doldrums licenses |
+| U4 | GPL-3.0-compatible dependencies only | ✅ | 2026-10-23 | blutter MIT ✅, reFlutter GPL-3.0 ✅, darter AGPL-3.0 ⚠️ (allowed via GPLv3 §13, network clause applies; old Dart only), Doldrums and Guardsquare flutter-re-demo have no license ❌ (reference only). Recommend blutter for F7 |
 | U5 | Fork-only files kept out of upstream PRs | ⬜ | | `requirements.md`, `progress.md` |
 | U6 | No breaking output/API/DB changes | ⬜ | | |
 
@@ -91,7 +91,7 @@ date and notes as work lands. Last updated: 2026-10-23
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F7 | Symbol / object-pool recovery | ⬜ | | Parser choice per U4 |
+| F7 | Symbol / object-pool recovery | ❓ | 2026-10-23 | Parser choice per U4: blutter recommended (arm64, per-Dart-version build → N2 cache) |
 | F8 | Pub package inventory | ⬜ | | Depends on F7 |
 | F10 | Insecure storage | ⬜ | | |
 | F11 | TLS / pinning checks | ⬜ | | |
@@ -148,5 +148,5 @@ date and notes as work lands. Last updated: 2026-10-23
 | 2026-10-23 | Recorded Q1–Q6 decisions, added upstream contribution section (U1–U6) and F29 |
 | 2026-10-23 | `upstream` remote fetched; branch `feat/flutter-planning` created |
 | 2026-10-23 | Planning docs committed (72fd4cb6, not pushed); `master` protected; Issues on; CODEOWNERS added |
-| 2026-10-23 | PR #1 merged, CI green (G5). Secret scan + upstream sync + Flutter package scaffolds (G4) on `feat/flutter-ci-secrets` (PR #2) |
+| 2026-10-23 | PR #1 merged, CI green (G5). Secret scan + upstream sync + Flutter package scaffolds (G4) on `feat/flutter-ci-secrets` (PR #2). U4 license review done. S3 env docs; fixed `.env.example` VT flags (`0` enabled VT upload) |
 | 2026-10-23 | Q5 confirmed; weekly upstream sync workflow; S1 secret handling + gitleaks workflow |
