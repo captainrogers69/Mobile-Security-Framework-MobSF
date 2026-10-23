@@ -185,7 +185,7 @@ Goal: get the Flutter work merged into upstream MobSF later.
 - Q4. Third-party snapshot parsers (blutter/reFlutter/Doldrums) allowed, subject
   to U4 (GPL-3.0-compatible license).
 - Q5. Dynamic lab: yes to the lab options — start on Android emulators, add physical
-  rooted/jailbroken devices and Corellium when needed. *(interpretation — confirm)*
+  rooted/jailbroken devices and Corellium when needed. (confirmed)
 - Q6. Users: both pentesters and dev CI → add CLI + SARIF output (F29).
 
 ## 10. Added from decisions
