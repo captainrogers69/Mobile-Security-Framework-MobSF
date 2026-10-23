@@ -12,7 +12,7 @@ date and notes as work lands. Last updated: 2026-10-23
 | Planning | 2 | 2 | ✅ |
 | Decisions | 6 | 6 | ✅ |
 | Phase 0 — Git setup | 8 | 8 | ✅ |
-| Phase 0 — Services & credentials | 1 | 3 | 🟡 |
+| Phase 0 — Services & credentials | 2 | 3 | 🟡 |
 | Upstream contribution | 2 | 6 | 🟡 |
 | Phase 1 — Detection & strings | 0 | 9 | ⬜ |
 | Phase 2 — Snapshot, checks, CLI | 0 | 11 | ⬜ |
@@ -58,7 +58,7 @@ date and notes as work lands. Last updated: 2026-10-23
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| S1 | `.env` + CI secrets, gitleaks in CI | 🟡 | 2026-10-23 | `.env` gitignored, `.env.example` added, `.github/workflows/secret-scan.yml` (gitleaks 8.21.2, sha256-pinned, scans new commits only; upstream history has 33 old findings). Passing on PRs. TODO: add `gitleaks` to required checks on `master` |
+| S1 | `.env` + CI secrets, gitleaks in CI | ✅ | 2026-10-23 | `.env` gitignored, `.env.example` added, `.github/workflows/secret-scan.yml` (gitleaks 8.21.2, sha256-pinned, scans new commits only; upstream history has 33 old findings). `gitleaks` is a required check on `master` |
 | S2 | Credentials inventory provisioned | ⬜ | | GitHub, registry, VT key, Django secret, DB |
 | S3 | `MOBSF_*` env vars documented | ✅ | 2026-10-23 | `docs/environment.md`: every var MobSF reads, defaults, and parse rule (`bool(getenv)` flags like `MOBSF_VT_UPLOAD` are on for `0`). Upstream PR candidate |
 
@@ -150,4 +150,4 @@ date and notes as work lands. Last updated: 2026-10-23
 | 2026-10-23 | Planning docs committed (72fd4cb6, not pushed); `master` protected; Issues on; CODEOWNERS added |
 | 2026-10-23 | PR #1 merged, CI green (G5). Secret scan + upstream sync + Flutter package scaffolds (G4) on `feat/flutter-ci-secrets` (PR #2). U4 license review done. S3 env docs; fixed `.env.example` VT flags (`0` enabled VT upload) |
 | 2026-10-23 | Q5 confirmed; weekly upstream sync workflow; S1 secret handling + gitleaks workflow |
-| 2026-10-23 | PR #2 merged. Upstream sync tested. Opened MobSF#2721 (env flag parsing, first upstream PR) and feature request MobSF#2722 (U1) |
+| 2026-10-23 | PR #2 merged. Upstream sync tested. Opened MobSF#2721 (env flag parsing, first upstream PR) and feature request MobSF#2722 (U1). `gitleaks` required on `master` (S1) |
