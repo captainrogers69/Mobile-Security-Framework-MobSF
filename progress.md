@@ -67,7 +67,7 @@ date and notes as work lands. Last updated: 2026-10-25
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
 | U1 | Feature-request issue upstream | ✅ | 2026-10-23 | MobSF#2722, assigned `ajinabraham`. Asks: core fit, external parser (blutter) OK, report section vs folded, code layout. Wait for answers before first Flutter PR |
-| U2 | Small focused PRs from `upstream/master` | 🟡 | 2026-10-23 | First: MobSF#2721 env flag parsing (`fix/env-bool-flags`). Fork CI run on draft #3 (closed) |
+| U2 | Small focused PRs from `upstream/master` | 🟡 | 2026-10-25 | MobSF#2721 (env flags) closed by maintainer, superseded by his broader MobSF#2724 (merged 2026-10-24, same `env.py`/`env_flag()` approach, only `1` enables). Next upstream PR: Flutter step 1 after #2722 answers |
 | U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | 🟡 | 2026-10-23 | #2721 uses PR template; lint + tests pass. Security-relevant fixes: decide public PR vs private advisory (SECURITY.md) before pushing to fork |
 | U4 | GPL-3.0-compatible dependencies only | ✅ | 2026-10-23 | blutter MIT ✅, reFlutter GPL-3.0 ✅, darter AGPL-3.0 ⚠️ (allowed via GPLv3 §13, network clause applies; old Dart only), Doldrums and Guardsquare flutter-re-demo have no license ❌ (reference only). Recommend blutter for F7 |
 | U5 | Fork-only files kept out of upstream PRs | 🟡 | 2026-10-23 | Upstream branches cut from `upstream/master`; #2721 has no fork-only files |
@@ -152,3 +152,4 @@ date and notes as work lands. Last updated: 2026-10-25
 | 2026-10-23 | Q5 confirmed; weekly upstream sync workflow; S1 secret handling + gitleaks workflow |
 | 2026-10-23 | PR #2 merged. Upstream sync tested. Opened MobSF#2721 (env flag parsing, first upstream PR) and feature request MobSF#2722 (U1) |
 | 2026-10-25 | S2 done: `.env` set up, Android 11 emulator verified for dynamic analysis. Phase 0 complete |
+| 2026-10-25 | Upstream fixed env flags in MobSF#2724 (supersedes our #2721). TODO after next upstream sync: update `docs/environment.md` parse rules (only `1` enables) |
