@@ -9,6 +9,9 @@ from mobsf.StaticAnalyzer.views.flutter.detect import (
     detect_flutter,
     flutter_from_dir,
 )
+from mobsf.StaticAnalyzer.views.flutter.snapshot import (
+    read_snapshot_header,
+)
 
 
 APK_RELEASE = [
@@ -150,3 +153,98 @@ class FlutterFromDirTests(SimpleTestCase):
                 self.skipTest('symlinks not supported')
             res = flutter_from_dir(tmp)
         self.assertFalse(res['is_flutter'])
+
+
+SNAP_HASH = '0123456789abcdef0123456789abcdef'
+SNAP_HASH_B = SNAP_HASH.encode()
+SNAP_FEATURES = b'product no-code_comments arm64 android compressed-pointers'
+
+
+def _snapshot(snap_hash=SNAP_HASH_B, features=SNAP_FEATURES):
+    """Build a Dart snapshot header: magic, length, kind, hash, features."""
+    return (b'\xf5\xf5\xdc\xdc' + b'\x00' * 16
+            + snap_hash + features + b'\x00')
+
+
+class SnapshotHeaderTests(SimpleTestCase):
+
+    def _write(self, tmp, data, name='libapp.so'):
+        path = Path(tmp) / name
+        path.write_bytes(data)
+        return path
+
+    def test_reads_hash_and_features(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, os.urandom(4096) + _snapshot())
+            res = read_snapshot_header(path)
+        self.assertEqual(res['snapshot_hash'], SNAP_HASH)
+        self.assertEqual(
+            res['features'],
+            ['product', 'no-code_comments', 'arm64', 'android',
+             'compressed-pointers'])
+
+    def test_no_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, b'\x7fELF' + b'\x00' * 4096)
+            self.assertIsNone(read_snapshot_header(path))
+
+    def test_skips_magic_with_invalid_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = _snapshot(snap_hash=b'Z' * 32)
+            path = self._write(tmp, bad + b'\x00' * 64 + _snapshot())
+            res = read_snapshot_header(path)
+        self.assertEqual(res['snapshot_hash'], SNAP_HASH)
+
+    def test_header_across_chunk_boundary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, b'\x00' * 1000 + _snapshot())
+            res = read_snapshot_header(path, chunk_size=1010)
+        self.assertEqual(res['snapshot_hash'], SNAP_HASH)
+
+    def test_truncated_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, _snapshot()[:40])
+            self.assertIsNone(read_snapshot_header(path))
+
+    def test_non_printable_features_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(
+                tmp, _snapshot(features=b'arm64 \x1b[31mevil <b>'))
+            res = read_snapshot_header(path)
+        self.assertEqual(res['snapshot_hash'], SNAP_HASH)
+        self.assertEqual(res['features'], ['arm64'])
+
+    def test_unterminated_features_capped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = _snapshot()[:52] + b'a' * 100000
+            path = self._write(tmp, data)
+            res = read_snapshot_header(path)
+        self.assertEqual(res['snapshot_hash'], SNAP_HASH)
+        self.assertLessEqual(sum(len(f) for f in res['features']), 1024)
+
+    def test_file_over_size_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, _snapshot() + b'\x00' * 100)
+            self.assertIsNone(read_snapshot_header(path, max_size=50))
+
+    def test_symlink_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = self._write(tmp, _snapshot(), name='real.so')
+            link = Path(tmp) / 'libapp.so'
+            try:
+                os.symlink(target, link)
+            except (OSError, NotImplementedError):
+                self.skipTest('symlinks not supported')
+            self.assertIsNone(read_snapshot_header(link))
+
+    def test_fifo_rejected(self):
+        if not hasattr(os, 'mkfifo'):
+            self.skipTest('mkfifo not supported')
+        with tempfile.TemporaryDirectory() as tmp:
+            fifo = Path(tmp) / 'libapp.so'
+            os.mkfifo(fifo)
+            # Would block forever if opened
+            self.assertIsNone(read_snapshot_header(fifo))
+
+    def test_missing_file(self):
+        self.assertIsNone(read_snapshot_header('/nonexistent/libapp.so'))
