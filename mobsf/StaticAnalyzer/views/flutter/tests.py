@@ -1,5 +1,6 @@
 """Unit tests for Flutter detection."""
 import os
+import re
 import tempfile
 from pathlib import Path
 
@@ -11,6 +12,10 @@ from mobsf.StaticAnalyzer.views.flutter.detect import (
 )
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
+)
+from mobsf.StaticAnalyzer.views.flutter.versions import (
+    dart_version,
+    load_dart_versions,
 )
 
 
@@ -157,6 +162,8 @@ class FlutterFromDirTests(SimpleTestCase):
 
 SNAP_HASH = '0123456789abcdef0123456789abcdef'
 SNAP_HASH_B = SNAP_HASH.encode()
+# Dart SDK 3.12.2 / Flutter 3.44.9 release APK
+SDK_3_12_HASH = 'ace654289f5abc240509fc941453ebc5'
 SNAP_FEATURES = b'product no-code_comments arm64 android compressed-pointers'
 
 
@@ -248,3 +255,33 @@ class SnapshotHeaderTests(SimpleTestCase):
 
     def test_missing_file(self):
         self.assertIsNone(read_snapshot_header('/nonexistent/libapp.so'))
+
+
+class DartVersionTests(SimpleTestCase):
+
+    def test_known_hash(self):
+        res = dart_version(SDK_3_12_HASH)
+        self.assertEqual(res['dart'], ['3.12.1', '3.12.2'])
+        self.assertIn('3.44.9', res['flutter'])
+
+    def test_unknown_hash(self):
+        self.assertIsNone(dart_version('f' * 32))
+
+    def test_invalid_input(self):
+        for bad in (None, '', 'ACE654289F5ABC240509FC941453EBC5', 42,
+                    '../../etc/passwd', SDK_3_12_HASH + 'x'):
+            self.assertIsNone(dart_version(bad))
+
+    def test_table_integrity(self):
+        semver = re.compile(r'^\d+\.\d+\.\d+$')
+        seen = set()
+        table = load_dart_versions()
+        self.assertGreater(len(table), 20)
+        for snap_hash, entry in table.items():
+            self.assertRegex(snap_hash, r'^[0-9a-f]{32}$')
+            self.assertTrue(entry['dart'])
+            for ver in entry['dart'] + entry['flutter']:
+                self.assertRegex(ver, semver)
+            # A Dart release has exactly one snapshot hash
+            self.assertFalse(seen & set(entry['dart']))
+            seen |= set(entry['dart'])
