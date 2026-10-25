@@ -79,11 +79,11 @@ date and notes as work lands. Last updated: 2026-10-25
 |---|---|---|---|---|
 | F1 | Detect Flutter in APK/AAB/IPA | 🟡 | 2026-10-25 | `flutter/detect.py` on `feat/flutter-detection` (from upstream). File names only, no symlink follow. Verified on real Flutter 3.44.9 release + debug APKs. Not wired into scan/report yet (waits on #2722) |
 | F2 | Debug/JIT vs release/AOT build mode | 🟡 | 2026-10-25 | `kernel_blob.bin` in `flutter_assets` → debug; AOT snapshot → release. Verified on real debug APK |
-| F3 | Engine + Dart SDK version, known CVEs | 🟡 | 2026-10-25 | `flutter/snapshot.py` reads snapshot hash + features (layout from dart-lang/sdk source). Dart 3.12.2 → `ace654289f5abc240509fc941453ebc5`. TODO: hash→version table (self-built), engine version, CVEs |
+| F3 | Engine + Dart SDK version, known CVEs | 🟡 | 2026-10-25 | `flutter/snapshot.py` reads snapshot hash + features. `flutter/versions.py` + `dart_versions.json`: 24 hashes, Dart 2.14.0–3.13.7 / Flutter 2.5.0–3.47.8, self-generated from official Dart SDKs (`scripts/update_flutter_dart_versions.py`, reproduces table byte for byte). Dart 2.12/2.13 not covered (no arm64 SDK). TODO: engine version, CVEs |
 | F4 | Obfuscation / split-debug-info detection | ⬜ | | |
 | F5 | Every `libapp.so` across ABIs and splits | 🟡 | 2026-10-25 | All ABIs + `split_apks/*` covered in `detect.py`; real APK shows 3 ABIs |
-| F6 | String extraction → secrets, URLs, configs | ⬜ | | |
-| F9 | `flutter_assets/` audit | ⬜ | | |
+| F6 | String extraction → secrets, URLs, configs | 🟡 | 2026-10-25 | Bug found: `ELFChecksec.strings()` missed all Dart strings in `libapp.so` (lief returns C strings only). Fixed in `elf.py` (a5991e7b): strings 27 → 12342, hardcoded token + URL now reported; `libflutter.so` unchanged; integration tests same as before. iOS already fine. Upstream PR candidate |
+| F9 | `flutter_assets/` audit | 🟡 | 2026-10-25 | `flutter/assets.py`: flags `.env`, Firebase configs, keys, DBs, named configs (names), then scans text assets for secrets with MobSF's `is_secret_key` + `detect_known_secrets`. Verified on real APK with bundled `.env` |
 | F26 | Flutter section in HTML/PDF/JSON report | ⬜ | | |
 | F27 | REST API parity | ⬜ | | |
 
@@ -155,3 +155,4 @@ date and notes as work lands. Last updated: 2026-10-25
 | 2026-10-25 | Upstream fixed env flags in MobSF#2724 (supersedes our #2721). TODO after next upstream sync: update `docs/environment.md` parse rules (only `1` enables) |
 | 2026-10-25 | GitHub disabled Actions on the fork (ticket to GitHub Support pending). PR #6 merged: fork CI runs Linux-only test matrix and amd64-only Docker test. PR #5 merged via admin bypass |
 | 2026-10-25 | Flutter F1/F2/F3/F5 core logic on `feat/flutter-detection` (60be2628, 1ad840b8): 25 unit tests, verified on real APKs. Upstream push URL set to `no_push` locally |
+| 2026-10-25 | Dart version table (619e42cd, af6867f0), F9 asset audit + secret scan (14430672, 6a6e6b1a), F6 Dart strings fix in `elf.py` (a5991e7b). 54 Flutter tests |
