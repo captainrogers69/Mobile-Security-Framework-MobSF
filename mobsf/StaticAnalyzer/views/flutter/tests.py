@@ -6,6 +6,9 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
+from mobsf.StaticAnalyzer.views.flutter.assets import (
+    audit_assets,
+)
 from mobsf.StaticAnalyzer.views.flutter.detect import (
     detect_flutter,
     flutter_from_dir,
@@ -285,3 +288,79 @@ class DartVersionTests(SimpleTestCase):
             # A Dart release has exactly one snapshot hash
             self.assertFalse(seen & set(entry['dart']))
             seen |= set(entry['dart'])
+
+
+FA = 'assets/flutter_assets/'
+IOS_FA = 'Payload/Runner.app/Frameworks/App.framework/flutter_assets/'
+
+
+class AssetAuditTests(SimpleTestCase):
+
+    def _types(self, paths):
+        return {f['file']: f['type'] for f in audit_assets(paths)}
+
+    def test_env_files(self):
+        res = self._types([
+            FA + '.env', FA + '.env.production', FA + 'config/prod.env',
+            IOS_FA + '.env'])
+        self.assertEqual(set(res.values()), {'env'})
+        self.assertEqual(len(res), 4)
+
+    def test_firebase_configs(self):
+        res = self._types([
+            FA + 'google-services.json',
+            FA + 'GoogleService-Info.plist',
+            FA + 'assets/firebase_options.json'])
+        self.assertEqual(set(res.values()), {'firebase'})
+        self.assertEqual(len(res), 3)
+
+    def test_keys_not_covered_elsewhere(self):
+        res = self._types([
+            FA + 'AuthKey_ABC123.p8', FA + 'release.keystore',
+            FA + 'ssh/id_rsa', FA + 'id_ed25519'])
+        self.assertEqual(set(res.values()), {'key'})
+        self.assertEqual(len(res), 4)
+
+    def test_cert_extensions_left_to_existing_check(self):
+        # .pem/.key/.p12/.jks are already reported by
+        # get_hardcoded_cert_keystore
+        self.assertEqual(audit_assets([
+            FA + 'cert.pem', FA + 'private.key', FA + 'store.jks',
+            FA + 'client.p12']), [])
+
+    def test_named_config_files(self):
+        res = self._types([
+            FA + 'assets/config.json', FA + 'assets/secrets.yaml',
+            FA + 'assets/api_keys.json', FA + 'credentials.xml'])
+        self.assertEqual(set(res.values()), {'config'})
+        self.assertEqual(len(res), 4)
+
+    def test_generic_json_not_flagged(self):
+        self.assertEqual(audit_assets([
+            FA + 'assets/translations/en.json',
+            FA + 'assets/animations/loading.json']), [])
+
+    def test_databases(self):
+        res = self._types([
+            FA + 'assets/app.db', FA + 'data.sqlite', FA + 'seed.sqlite3',
+            FA + 'cache.realm', FA + 'box.hive'])
+        self.assertEqual(set(res.values()), {'database'})
+        self.assertEqual(len(res), 5)
+
+    def test_framework_files_ignored(self):
+        self.assertEqual(audit_assets([
+            FA + 'AssetManifest.json', FA + 'AssetManifest.bin',
+            FA + 'FontManifest.json', FA + 'NOTICES.Z',
+            FA + 'NativeAssetsManifest.json',
+            FA + 'shaders/ink_sparkle.frag',
+            FA + 'fonts/MaterialIcons-Regular.otf',
+            FA + 'packages/cupertino_icons/assets/CupertinoIcons.ttf',
+            FA + 'kernel_blob.bin']), [])
+
+    def test_only_inside_flutter_assets(self):
+        self.assertEqual(audit_assets([
+            '.env', 'assets/.env', 'res/raw/config.json']), [])
+
+    def test_sorted_and_unique(self):
+        res = audit_assets([FA + 'b.env', FA + 'a.env', FA + 'a.env'])
+        self.assertEqual([f['file'] for f in res], [FA + 'a.env', FA + 'b.env'])
