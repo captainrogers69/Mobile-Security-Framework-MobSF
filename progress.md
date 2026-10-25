@@ -14,7 +14,7 @@ date and notes as work lands. Last updated: 2026-10-25
 | Phase 0 — Git setup | 8 | 8 | ✅ |
 | Phase 0 — Services & credentials | 1 | 3 | 🟡 |
 | Upstream contribution | 2 | 6 | 🟡 |
-| Phase 1 — Detection & strings | 0 | 9 | ⬜ |
+| Phase 1 — Detection & strings | 0 | 9 | 🟡 |
 | Phase 2 — Snapshot, checks, CLI | 0 | 11 | ⬜ |
 | Phase 3 — Source ZIP | 0 | 4 | ⬜ |
 | Phase 4 — Dynamic (Android) | 0 | 4 | ⬜ |
@@ -77,11 +77,11 @@ date and notes as work lands. Last updated: 2026-10-25
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F1 | Detect Flutter in APK/AAB/IPA | ⬜ | | Existing: `is_dart()` in `binary/elf.py` |
-| F2 | Debug/JIT vs release/AOT build mode | ⬜ | | |
-| F3 | Engine + Dart SDK version, known CVEs | ⬜ | | |
+| F1 | Detect Flutter in APK/AAB/IPA | 🟡 | 2026-10-25 | `flutter/detect.py` on `feat/flutter-detection` (from upstream). File names only, no symlink follow. Verified on real Flutter 3.44.9 release + debug APKs. Not wired into scan/report yet (waits on #2722) |
+| F2 | Debug/JIT vs release/AOT build mode | 🟡 | 2026-10-25 | `kernel_blob.bin` in `flutter_assets` → debug; AOT snapshot → release. Verified on real debug APK |
+| F3 | Engine + Dart SDK version, known CVEs | 🟡 | 2026-10-25 | `flutter/snapshot.py` reads snapshot hash + features (layout from dart-lang/sdk source). Dart 3.12.2 → `ace654289f5abc240509fc941453ebc5`. TODO: hash→version table (self-built), engine version, CVEs |
 | F4 | Obfuscation / split-debug-info detection | ⬜ | | |
-| F5 | Every `libapp.so` across ABIs and splits | ⬜ | | |
+| F5 | Every `libapp.so` across ABIs and splits | 🟡 | 2026-10-25 | All ABIs + `split_apks/*` covered in `detect.py`; real APK shows 3 ABIs |
 | F6 | String extraction → secrets, URLs, configs | ⬜ | | |
 | F9 | `flutter_assets/` audit | ⬜ | | |
 | F26 | Flutter section in HTML/PDF/JSON report | ⬜ | | |
@@ -153,3 +153,5 @@ date and notes as work lands. Last updated: 2026-10-25
 | 2026-10-23 | PR #2 merged. Upstream sync tested. Opened MobSF#2721 (env flag parsing, first upstream PR) and feature request MobSF#2722 (U1) |
 | 2026-10-25 | S2 done: `.env` set up, Android 11 emulator verified for dynamic analysis. Phase 0 complete |
 | 2026-10-25 | Upstream fixed env flags in MobSF#2724 (supersedes our #2721). TODO after next upstream sync: update `docs/environment.md` parse rules (only `1` enables) |
+| 2026-10-25 | GitHub disabled Actions on the fork (ticket to GitHub Support pending). PR #6 merged: fork CI runs Linux-only test matrix and amd64-only Docker test. PR #5 merged via admin bypass |
+| 2026-10-25 | Flutter F1/F2/F3/F5 core logic on `feat/flutter-detection` (60be2628, 1ad840b8): 25 unit tests, verified on real APKs. Upstream push URL set to `no_push` locally |
