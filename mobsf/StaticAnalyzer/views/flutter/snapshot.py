@@ -6,11 +6,9 @@ int32 magic, int64 length, int64 kind, then the snapshot version hash
 (Version::SnapshotString) and a NUL-terminated features string.
 """
 import logging
-import os
 import re
-import stat
 
-from mobsf.MobSF.security import is_pipe_or_link
+from mobsf.StaticAnalyzer.views.flutter.fileio import open_regular
 
 logger = logging.getLogger(__name__)
 
@@ -40,26 +38,10 @@ def _parse(data):
     }
 
 
-def _open_regular(path, max_size):
-    """Open a regular file without following links or blocking on FIFOs."""
-    if is_pipe_or_link(path):
-        return None
-    flags = (os.O_RDONLY
-             | getattr(os, 'O_NOFOLLOW', 0)
-             | getattr(os, 'O_NONBLOCK', 0)
-             | getattr(os, 'O_BINARY', 0))
-    fd = os.open(path, flags)
-    st = os.fstat(fd)
-    if not stat.S_ISREG(st.st_mode) or st.st_size > max_size:
-        os.close(fd)
-        return None
-    return os.fdopen(fd, 'rb')
-
-
 def read_snapshot_header(path, max_size=MAX_SIZE, chunk_size=CHUNK_SIZE):
     """Return the first valid Dart snapshot header in a file, or None."""
     try:
-        fobj = _open_regular(path, max_size)
+        fobj = open_regular(path, max_size)
         if fobj is None:
             return None
         with fobj:

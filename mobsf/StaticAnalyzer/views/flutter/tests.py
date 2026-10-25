@@ -7,6 +7,7 @@ from pathlib import Path
 from django.test import SimpleTestCase
 
 from mobsf.StaticAnalyzer.views.flutter.assets import (
+    asset_secrets,
     audit_assets,
 )
 from mobsf.StaticAnalyzer.views.flutter.detect import (
@@ -364,3 +365,92 @@ class AssetAuditTests(SimpleTestCase):
     def test_sorted_and_unique(self):
         res = audit_assets([FA + 'b.env', FA + 'a.env', FA + 'a.env'])
         self.assertEqual([f['file'] for f in res], [FA + 'a.env', FA + 'b.env'])
+
+
+# Built at runtime so secret scanners do not flag this test file
+FAKE_GH_TOKEN = 'ghp' + '_' + 'A1b2C3d4E5' * 3 + 'F6g7H8'
+
+
+class AssetSecretTests(SimpleTestCase):
+
+    def _scan(self, files, audit=None, **kwargs):
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel, data in files.items():
+                path = Path(tmp) / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data.encode() if isinstance(data, str)
+                                 else data)
+            if audit is None:
+                audit = audit_assets(list(files))
+            res = asset_secrets(tmp, audit, **kwargs)
+        return {r['file']: r['secrets'] for r in res}
+
+    def test_env_key_value(self):
+        res = self._scan({FA + '.env': 'API_KEY=abc123\nDEBUG=true\n'})
+        self.assertEqual(res[FA + '.env'], ['"API_KEY" : "abc123"'])
+
+    def test_known_secret_format_under_any_key(self):
+        res = self._scan({FA + '.env': f'SOMETHING={FAKE_GH_TOKEN}\n'})
+        self.assertIn(f'GitHub token: {FAKE_GH_TOKEN}', res[FA + '.env'])
+
+    def test_nested_json(self):
+        res = self._scan({
+            FA + 'firebase_options.json':
+            '{"android": {"apiKey": "AIzaSyFAKEFAKE", "appId": "1:2:x"}}'})
+        self.assertEqual(
+            res[FA + 'firebase_options.json'],
+            ['"apiKey" : "AIzaSyFAKEFAKE"'])
+
+    def test_plist_pairs(self):
+        res = self._scan({
+            FA + 'GoogleService-Info.plist':
+            '<dict><key>API_KEY</key>\n<string>AIzaPlist</string>'
+            '<key>BUNDLE_ID</key><string>com.x</string></dict>'})
+        self.assertEqual(
+            res[FA + 'GoogleService-Info.plist'],
+            ['"API_KEY" : "AIzaPlist"'])
+
+    def test_yaml(self):
+        res = self._scan({FA + 'secrets.yaml': 'token: "t0k3n"\nname: x\n'})
+        self.assertEqual(res[FA + 'secrets.yaml'], ['"token" : "t0k3n"'])
+
+    def test_value_with_space_not_secret(self):
+        res = self._scan({FA + '.env': 'API_KEY=enter your key here\n'})
+        self.assertEqual(res, {})
+
+    def test_database_not_read(self):
+        res = self._scan({FA + 'app.db': f'API_KEY={FAKE_GH_TOKEN}\n'})
+        self.assertEqual(res, {})
+
+    def test_traversal_entry_skipped(self):
+        with tempfile.TemporaryDirectory() as root:
+            outside = Path(root) / 'outside' / 'flutter_assets'
+            outside.mkdir(parents=True)
+            (outside / '.env').write_text('API_KEY=leak\n')
+            base = Path(root) / 'app'
+            base.mkdir()
+            audit = [{'file': '../outside/flutter_assets/.env',
+                      'type': 'env'}]
+            self.assertEqual(asset_secrets(base, audit), [])
+
+    def test_symlinked_asset_skipped(self):
+        with tempfile.TemporaryDirectory() as root:
+            secret = Path(root) / 'host.env'
+            secret.write_text('API_KEY=leak\n')
+            base = Path(root) / 'app'
+            (base / FA).mkdir(parents=True)
+            try:
+                os.symlink(secret, base / FA / '.env')
+            except (OSError, NotImplementedError):
+                self.skipTest('symlinks not supported')
+            audit = [{'file': FA + '.env', 'type': 'env'}]
+            self.assertEqual(asset_secrets(base, audit), [])
+
+    def test_oversized_asset_skipped(self):
+        res = self._scan(
+            {FA + '.env': 'API_KEY=abc123\n' + 'x' * 100}, max_size=20)
+        self.assertEqual(res, {})
+
+    def test_binary_garbage_tolerated(self):
+        res = self._scan({FA + '.env': b'\xff\xfe\x00API_KEY=abc\n\x80'})
+        self.assertEqual(res[FA + '.env'], ['"API_KEY" : "abc"'])
