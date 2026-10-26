@@ -3,6 +3,7 @@
 import hashlib
 import logging
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from defusedxml.minidom import parseString
@@ -25,6 +26,18 @@ logger = logging.getLogger(__name__)
 AXML_MAGIC = b'\x03\x00\x08\x00'
 MAX_MANIFEST_SIZE = 5 * 1024 * 1024
 SEVERITY_RANK = {'high': 0, 'warning': 1, 'info': 2}
+
+
+@contextmanager
+def _no_scan_status_logs():
+    """Silence unzip()'s scan status updates: CLI scans have no scan record."""
+    status_logger = logging.getLogger('mobsf.MobSF.utils')
+    level = status_logger.level
+    status_logger.setLevel(logging.CRITICAL)
+    try:
+        yield
+    finally:
+        status_logger.setLevel(level)
 
 
 def _md5(path):
@@ -73,7 +86,8 @@ def scan_path(path, osv=False):
         return _scan_dir(path, osv)
     with tempfile.TemporaryDirectory() as tmp:
         # MobSF's unzip handles zip slip, size limits and encrypted entries
-        unzip(_md5(path), path.as_posix(), tmp + '/')
+        with _no_scan_status_logs():
+            unzip(_md5(path), path.as_posix(), tmp + '/')
         return _scan_dir(Path(tmp), osv)
 
 
