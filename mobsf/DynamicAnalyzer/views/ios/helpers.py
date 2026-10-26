@@ -7,7 +7,6 @@ from pathlib import Path
 from django.conf import settings
 
 from mobsf.DynamicAnalyzer.tools.webproxy import (
-    get_http_tools_url,
     start_proxy,
     stop_httptools,
 )
@@ -28,7 +27,9 @@ def get_local_ipa_list():
     """Get local ipa list."""
     scan_apps = []
     ipas = StaticAnalyzerIOS.objects.filter(
-        FILE_NAME__endswith='.ipa')
+        FILE_NAME__endswith='.ipa').only(
+            'MD5', 'APP_NAME', 'APP_VERSION', 'FILE_NAME',
+            'BUNDLE_ID', 'MACHO_ANALYSIS')
     for ipa in reversed(ipas):
         bundle_hash = get_md5(ipa.BUNDLE_ID.encode('utf-8'))
         frida_dump = Path(
@@ -286,7 +287,7 @@ def configure_proxy(request, project, ci=None):
     """Configure HTTPS Proxy."""
     proxy_port = settings.PROXY_PORT
     logger.info('Starting HTTPS Proxy on %s', proxy_port)
-    stop_httptools(get_http_tools_url(request))
+    stop_httptools()
     start_proxy(proxy_port, project)
     if ci:
         # Remote Port forward for HTTPS Proxy

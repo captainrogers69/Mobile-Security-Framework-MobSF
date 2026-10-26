@@ -212,7 +212,7 @@ urlpatterns = [
     re_path(r'^api/v1/ios/device_report_json$',
             api_iddz.api_device_report_json),
 ]
-if settings.API_ONLY == '0':
+if not settings.API_ONLY:
     urlpatterns.extend([
         # General
         re_path(r'^$', home.index, name='home'),
@@ -221,7 +221,6 @@ if settings.API_ONLY == '0':
         re_path(fr'^download_binary/{checksum_regex}/$',
                 home.download_binary,
                 name='download_binary'),
-        re_path(r'^download_scan/', home.download_apk, name='download_scan'),
         re_path(r'^generate_downloads/$',
                 home.generate_download,
                 name='generate_downloads'),
@@ -294,6 +293,21 @@ if settings.API_ONLY == '0':
         re_path(r'^android/dynamic_analysis/$',
                 dz.android_dynamic_analysis,
                 name='dynamic_android'),
+        re_path(r'^android/device_details/$',
+                dz.android_device_details,
+                name='android_device_details'),
+        re_path(r'^android/device_apps/$',
+                dz.android_device_apps,
+                name='android_device_apps'),
+        re_path(r'^android/device_app_icon/$',
+                dz.android_device_app_icon,
+                name='android_device_app_icon'),
+        re_path(r'^android/pull_scan/$',
+                dz.pull_and_scan,
+                name='android_pull_scan'),
+        re_path(r'^android/package_status/$',
+                dz.android_package_status,
+                name='android_package_status'),
         re_path(fr'^android_dynamic/{checksum_regex}$',
                 dz.dynamic_analyzer,
                 name='dynamic_analyzer'),

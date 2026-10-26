@@ -16,6 +16,7 @@ from django.conf import settings
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 
+from mobsf.MobSF.security import is_pipe_or_link
 from mobsf.MobSF.utils import (
     append_scan_status,
     file_size,
@@ -74,6 +75,12 @@ from mobsf.StaticAnalyzer.views.common.firebase import (
 from mobsf.StaticAnalyzer.views.common.appsec import (
     get_android_dashboard,
 )
+from mobsf.StaticAnalyzer.views.flutter.integration import (
+    load_result as flutter_result,
+    scan_binary as flutter_scan_binary,
+    scan_source as flutter_scan_source,
+)
+from mobsf.StaticAnalyzer.views.flutter.source import is_flutter_source
 from mobsf.StaticAnalyzer.views.common.async_task import (
     async_analysis,
     mark_task_completed,
@@ -183,6 +190,11 @@ def apk_analysis_task(checksum, app_dic, rescan, queue=False):
             checksum,
             app_dic['app_dir'],
             'elf')
+        flutter_scan_binary(
+            checksum,
+            app_dic['app_dir'],
+            'android',
+            app_dic.get('manifest_parsed_xml'))
         cert_dic = cert_info(app_dic, man_data_dic)
         apkid_results = apkid.apkid_analysis(
             checksum,
@@ -249,6 +261,7 @@ def generate_dynamic_context(request, app_dic, checksum, context, api):
     """Generate Dynamic Context."""
     context['appsec'] = get_android_dashboard(context, True)
     context['average_cvss'] = get_avg_cvss(context['code_analysis']['findings'])
+    context['flutter'] = flutter_result(checksum)
     logcat_file = Path(app_dic['app_dir']) / 'logcat.txt'
     context['dynamic_analysis_done'] = logcat_file.exists()
     context['virus_total'] = None
@@ -366,6 +379,7 @@ def generate_dynamic_src_context(request, context, api):
     """Generate Dynamic Source Context."""
     context['appsec'] = get_android_dashboard(context, True)
     context['average_cvss'] = get_avg_cvss(context['code_analysis']['findings'])
+    context['flutter'] = flutter_result(context['md5'])
     template = 'static_analysis/android_source_analysis.html'
     return context if api else render(request, template, context)
 
@@ -394,6 +408,9 @@ def src_analysis(request, app_dic, rescan, api):
             checksum,
             app_dic['app_path'],
             app_dic['app_dir'])
+        # Flutter project: analyse before the Android source check
+        # moves android/ to the ZIP root
+        flutter_scan_source(checksum, app_dic['app_dir'])
         # Check if Valid Directory Structure and get ZIP Type
         pro_type, valid = valid_source_code(
             checksum,
@@ -465,6 +482,31 @@ def move_to_parent(inside_path, app_path):
     shutil.rmtree(inside_path)
 
 
+def move_flutter_android(app_path):
+    """Move the Android shell of a Flutter project to the app root.
+
+    Files already present at the root (e.g. the Flutter project's
+    .gitignore) are kept; links and special files are skipped.
+    """
+    root = is_flutter_source(app_path)
+    if not root:
+        return None, False
+    android = root / 'android'
+    if is_pipe_or_link(android):
+        return None, False
+    ide, is_and = is_android_source(android)
+    if not ide:
+        return None, False
+    for item in android.iterdir():
+        target = app_path / item.name
+        if (is_pipe_or_link(item) or target.exists()
+                or target.is_symlink()):
+            continue
+        shutil.move(str(item), str(target))
+    shutil.rmtree(android)
+    return ide, is_and
+
+
 def valid_source_code(checksum, app_dir):
     """Test if this is a valid source code zip."""
     try:
@@ -475,6 +517,11 @@ def valid_source_code(checksum, app_dir):
         app_path = Path(app_dir)
         ide, is_and = is_android_source(app_path)
 
+        if ide:
+            return ide, is_and
+
+        # Flutter project, Android shell in <project>/android
+        ide, is_and = move_flutter_android(app_path)
         if ide:
             return ide, is_and
 

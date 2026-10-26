@@ -57,6 +57,10 @@ from mobsf.StaticAnalyzer.views.common.firebase import (
 from mobsf.StaticAnalyzer.views.common.appsec import (
     get_ios_dashboard,
 )
+from mobsf.StaticAnalyzer.views.flutter.integration import (
+    load_result as flutter_result,
+    scan_binary as flutter_scan_binary,
+)
 from mobsf.StaticAnalyzer.views.common.async_task import (
     async_analysis,
     mark_task_completed,
@@ -226,6 +230,7 @@ def ipa_analysis_task(checksum, app_dic, rescan, queue=False):
             app_dic['bin_dir'],
             'macho')
         bin_dict['dylib_analysis'] = lb['macho_analysis']
+        flutter_scan_binary(checksum, app_dic['app_dir'], 'ios')
         bin_dict['framework_analysis'] = lb['framework_analysis']
         # Extract String metadata from binary
         code_dict = get_strings_metadata(
@@ -269,6 +274,7 @@ def generate_dynamic_context(request, app_dic, context, checksum, api):
         context['virus_total'] = vt.get_result(app_dic['app_path'])
     context['appsec'] = get_ios_dashboard(context, True)
     context['average_cvss'] = get_avg_cvss(context['binary_analysis'])
+    context['flutter'] = flutter_result(checksum)
     template = 'static_analysis/ios_binary_analysis.html'
     return context if api else render(request, template, context)
 

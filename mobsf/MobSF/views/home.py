@@ -32,12 +32,12 @@ from mobsf.MobSF.utils import (
     key,
     print_n_send_error_response,
     python_dict,
+    scan_state_dir,
 )
 from mobsf.MobSF.init import api_key
 from mobsf.MobSF.security import is_safe_path, sanitize_filename, sanitize_svg
 from mobsf.MobSF.views.helpers import FileType
 from mobsf.MobSF.views.scanning import Scanning
-from mobsf.MobSF.views.apk_downloader import apk_download
 from mobsf.StaticAnalyzer.models import (
     EnqueuedTask,
     RecentScansDB,
@@ -195,7 +195,7 @@ def api_docs(request):
     """Api Docs Route."""
     key = '*******'
     try:
-        if (settings.DISABLE_AUTHENTICATION == '1'
+        if (settings.DISABLE_AUTHENTICATION
                 or request.user.is_staff
                 or request.user.groups.filter(name=MAINTAINER_GROUP).exists()):
             key = api_key(settings.MOBSF_HOME)
@@ -278,9 +278,9 @@ def recent_scans(request, page_size=10, page_number=1):
 
     android = StaticAnalyzerAndroid.objects.filter(
         MD5__in=md5_list).only(
-            'PACKAGE_NAME', 'VERSION_NAME', 'FILE_NAME', 'MD5')
+            'PACKAGE_NAME', 'VERSION_NAME', 'FILE_NAME', 'MD5', 'ICON_PATH')
     ios = StaticAnalyzerIOS.objects.filter(
-        MD5__in=md5_list).only('FILE_NAME', 'MD5')
+        MD5__in=md5_list).only('FILE_NAME', 'MD5', 'ICON_PATH')
 
     updir = Path(settings.UPLD_DIR)
     icon_mapping = {}
@@ -315,27 +315,6 @@ def recent_scans(request, page_size=10, page_number=1):
     }
     template = 'general/recent.html'
     return render(request, template, context)
-
-
-@login_required
-@permission_required(Permissions.SCAN)
-def download_apk(request):
-    """Download and APK by package name."""
-    package = request.POST['package']
-    # Package validated in apk_download()
-    context = {
-        'status': 'failed',
-        'description': 'Unable to download APK',
-    }
-    res = apk_download(package)
-    if res:
-        context = res
-        context['status'] = 'ok'
-        context['package'] = package
-    resp = HttpResponse(
-        json.dumps(context),
-        content_type='application/json; charset=utf-8')
-    return resp
 
 
 @login_required
@@ -421,7 +400,10 @@ def file_download(dwd_file, filename, content_type):
         with open(dwd_file, 'r', encoding='utf-8') as file:
             svg_content = file.read()
             cleaned_svg = sanitize_svg(svg_content)
-            return create_response(cleaned_svg, is_binary=False)
+            response = create_response(cleaned_svg, is_binary=False)
+            response['Content-Security-Policy'] = (
+                "default-src 'none'; style-src 'unsafe-inline'")
+            return response
 
     # Handle all other binary file types
     with open(dwd_file, 'rb') as file:
@@ -569,6 +551,10 @@ def delete_scan(request, api=False):
         app_upload_dir = os.path.join(settings.UPLD_DIR, md5_hash)
         if is_dir_exists(app_upload_dir):
             shutil.rmtree(app_upload_dir)
+        # Delete host-side scan state
+        state_dir = scan_state_dir(md5_hash)
+        if state_dir.is_dir() and not state_dir.is_symlink():
+            shutil.rmtree(state_dir)
         # Delete Download Dir Contents
         dw_dir = settings.DWD_DIR
         for item in os.listdir(dw_dir):
