@@ -13,6 +13,10 @@ Plan and status: [`requirements.md`](../requirements.md), [`progress.md`](../pro
 - Dart SDK security advisories that affect built apps, by version
 - Obfuscation (`--obfuscate`) and split debug info (`--split-debug-info`)
 - Plugin and package inventory, also for obfuscated apps (from native plugin registration)
+- Platform channels (list, no findings), also for obfuscated apps: plugin channels
+  (name matches a detected package), app channels (name in both the Dart code and the
+  app's native code: dex, iOS executable), Pigeon channels counted per package.
+  Unattributed channel-like text and Flutter engine channels are left out
 - Package-based checks: unencrypted storage, SSL pinning, WebView, root/jailbreak detection
 - Flutter deep linking enabled, WebView JavaScript channels
 - Sensitive files in `flutter_assets/` (`.env`, Firebase configs, keys, databases) and
@@ -22,6 +26,8 @@ Plan and status: [`requirements.md`](../requirements.md), [`progress.md`](../pro
 - `pubspec.lock` packages with exact versions
 - Dart code rules (e.g. `badCertificateCallback` returning true), with file and line
 - Deep linking flags, declared assets and their secrets
+- Platform channels named in `MethodChannel`, `EventChannel`, `BasicMessageChannel`
+  calls, with files
 - Optional: known vulnerabilities of locked packages from OSV (see below)
 
 ## Where it shows
@@ -83,3 +89,6 @@ python scripts/update_flutter_dart_versions.py --all    # rebuild
   2.x/3.x: the plugin always contains the method name, used or not.
 - For Flutter project ZIPs, only the Android app in `android/` goes through MobSF's
   Android source analysis; the iOS app in `ios/` is not analysed yet.
+- Platform channels: debug builds (no compiled Dart) get no list; Pigeon names of old
+  plugins (no package in the name, before 2023) and app channels whose native side is
+  outside the dex files / iOS main executable (e.g. in an SDK framework) are not listed.

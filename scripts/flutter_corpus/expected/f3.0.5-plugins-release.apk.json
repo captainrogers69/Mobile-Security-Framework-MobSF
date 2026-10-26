@@ -33,6 +33,11 @@
   "shared_preferences_android",
   "webview_flutter_android"
  ],
+ "platform_channels": [
+  "plugin:plugins.flutter.io/shared_preferences_android",
+  "plugin:plugins.flutter.io/webview",
+  "plugin:plugins.it_nomads.com/flutter_secure_storage"
+ ],
  "deep_linking": null,
  "js_channels": null,
  "assets": [],

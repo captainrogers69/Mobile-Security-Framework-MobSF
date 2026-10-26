@@ -29,6 +29,11 @@
   "shared_preferences_foundation",
   "webview_flutter_wkwebview"
  ],
+ "platform_channels": [
+  "plugin:plugins.flutter.io/shared_preferences",
+  "plugin:plugins.flutter.io/webview",
+  "plugin:plugins.it_nomads.com/flutter_secure_storage"
+ ],
  "deep_linking": null,
  "js_channels": false,
  "assets": [],

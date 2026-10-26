@@ -46,6 +46,10 @@ def summary(result):
         'split_debug_info': result.get('split_debug_info'),
         'packages': result.get('packages'),
         'plugins': sorted(p['name'] for p in result.get('plugins') or []),
+        'platform_channels': [
+            f'{c["kind"]}:{c["name"]}' + (
+                f' ({c["count"]})' if c['kind'] == 'pigeon' else '')
+            for c in result.get('platform_channels') or []],
         'deep_linking': result.get('deep_linking'),
         'js_channels': result.get('js_channels'),
         'assets': result.get('assets'),

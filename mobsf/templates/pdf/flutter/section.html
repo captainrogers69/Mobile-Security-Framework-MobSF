@@ -31,5 +31,21 @@
           {% endfor %}
         </tbody>
       </table>
+      {% if flutter.platform_channels %}
+      </br>
+      <h5>Platform channels</h5>
+      <table class="basic">
+        <thead><tr><th>CHANNEL</th><th>FROM</th><th>PACKAGE</th></tr></thead>
+        <tbody>
+          {% for c in flutter.platform_channels %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>{% if c.kind == "app" %}App{% elif c.kind == "pigeon" %}Pigeon ({{ c.count }} channels){% else %}Plugin{% endif %}</td>
+            <td>{{ c.package|default_if_none:"" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
       </br></br>
 {% endif %}

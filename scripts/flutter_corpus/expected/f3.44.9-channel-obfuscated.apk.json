@@ -1,0 +1,35 @@
+{
+ "is_flutter": true,
+ "platform": "android",
+ "build_mode": "release",
+ "abis": [
+  "arm64-v8a",
+  "armeabi-v7a",
+  "x86_64"
+ ],
+ "flutter": [
+  "3.44.9"
+ ],
+ "dart": [
+  "3.12.2"
+ ],
+ "obfuscated": true,
+ "split_debug_info": true,
+ "packages": [
+  "flutter"
+ ],
+ "plugins": [],
+ "platform_channels": [
+  "app:samples.flutter.dev/battery"
+ ],
+ "deep_linking": null,
+ "js_channels": false,
+ "assets": [],
+ "asset_secret_files": [],
+ "findings": [
+  "good:flutter_obfuscated",
+  "high:flutter_advisory_GHSA-frr6-h895-5pxp",
+  "info:flutter_no_root_detection",
+  "info:flutter_no_ssl_pinning"
+ ]
+}

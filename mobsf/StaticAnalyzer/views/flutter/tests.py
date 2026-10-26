@@ -19,6 +19,7 @@ import requests
 from django.conf import settings
 from django.core.management import call_command
 from django.db.utils import OperationalError
+from django.template.loader import render_to_string
 from django.test import SimpleTestCase, override_settings
 
 from mobsf.MobSF.utils import scan_state_file
@@ -34,6 +35,10 @@ from mobsf.StaticAnalyzer.views.flutter.assets import (
     classify_assets,
 )
 from mobsf.StaticAnalyzer.views.flutter.binary import flutter_binary_analysis
+from mobsf.StaticAnalyzer.views.flutter.channels import (
+    binary_channels,
+    source_channels,
+)
 from mobsf.StaticAnalyzer.views.flutter.checks import (
     flutter_binary_checks,
     flutter_build_checks,
@@ -1621,13 +1626,19 @@ class BinaryAnalysisTests(SimpleTestCase):
     def test_android_app(self):
         manifest = parseString(MANIFEST.format(
             meta=DEEPLINK_META.format(value='true')))
+        app = dict(ANDROID_APP)
+        app['lib/arm64-v8a/libapp.so'] += (
+            b'\x00plugins.flutter.io/shared_preferences\x00')
         with tempfile.TemporaryDirectory() as tmp:
-            rels = self._app(tmp, ANDROID_APP)
+            rels = self._app(tmp, app)
             res = flutter_binary_analysis(
                 tmp, rels, 'android', parsed_manifest=manifest)
         self.assertTrue(res['is_flutter'])
         self.assertEqual(res['build_mode'], 'release')
         self.assertEqual(res['abis'], ['arm64-v8a'])
+        self.assertEqual(
+            [(c['kind'], c['name']) for c in res['platform_channels']],
+            [('plugin', 'plugins.flutter.io/shared_preferences')])
         self.assertEqual(res['snapshot_hash'], SDK_3_12_HASH)
         # Engine names Flutter 3.44.9, which ships Dart 3.12.2
         self.assertEqual(res['dart'], ['3.12.2'])
@@ -1773,11 +1784,16 @@ class SourceAnalysisTests(SimpleTestCase):
 
     def test_project_without_osv(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self._project(tmp, PROJECT_FILES)
+            self._project(tmp, dict(PROJECT_FILES, **{
+                'lib/battery.dart':
+                    "const c = MethodChannel('samples.flutter.dev/battery');"}))
             res = flutter_source_analysis(tmp)
         self.assertTrue(res['is_flutter'])
         self.assertEqual([p['name'] for p in res['packages']],
                          ['http', 'shared_preferences'])
+        self.assertEqual(
+            [(c['name'], c['files']) for c in res['platform_channels']],
+            [('samples.flutter.dev/battery', ['lib/battery.dart'])])
         self.assertIsNone(res['osv'])
         self.assertEqual(res['deep_linking'], {'android': True, 'ios': False})
         self.assertIn('dart_bad_certificate_callback', res['code_analysis'])
@@ -2220,3 +2236,188 @@ class CLIDatabaseTests(SimpleTestCase):
                     self.assertNoLogs('mobsf.MobSF.utils', level='ERROR'):
                 res = scan_path(apk)
         self.assertTrue(res['is_flutter'])
+
+
+DART_CHANNELS = (
+    b'\x00plugins.flutter.io/shared_preferences\x00'
+    b'\x00plugins.flutter.io/webview\x00'
+    b'\x00plugins.it_nomads.com/flutter_secure_storage\x00'
+    b'\x00samples.flutter.dev/battery\x00'
+    # Text shaped like a channel, absent from the native code
+    b'\x00api.example.com/users\x00'
+    # Flutter engine channels
+    b'\x00dev.flutter/channel-buffers\x00\x00flutter/platform\x00'
+    b'\x00dev.flutter.pigeon.webview_flutter_android.WebView.loadUrl\x00'
+    b'\x00dev.flutter.pigeon.webview_flutter_android.WebView.reload\x00'
+    # Old Pigeon names carry no package
+    b'\x00dev.flutter.pigeon.WKWebViewHostApi.create\x00')
+PACKAGES = ['flutter', 'flutter_secure_storage', 'shared_preferences',
+            'webview_flutter']
+
+
+class PlatformChannelTests(SimpleTestCase):
+
+    def _app(self, tmp, files):
+        for rel, data in files.items():
+            path = Path(tmp) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        return list(files)
+
+    def _rows(self, res):
+        return [(c['kind'], c['name'], c['package'], c['count'])
+                for c in res]
+
+    def test_android_attribution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                'lib/arm64-v8a/libapp.so': DART_CHANNELS,
+                # dex strings follow a length byte
+                'classes.dex': b'dex\n035\x00\x1bsamples.flutter.dev/battery\x00',
+            })
+            res = binary_channels(
+                tmp, rels, Path(tmp) / 'lib/arm64-v8a/libapp.so', PACKAGES)
+        self.assertEqual(self._rows(res), [
+            ('app', 'samples.flutter.dev/battery', None, 1),
+            ('pigeon', 'dev.flutter.pigeon.webview_flutter_android.*',
+             'webview_flutter', 2),
+            ('plugin', 'plugins.flutter.io/shared_preferences',
+             'shared_preferences', 1),
+            ('plugin', 'plugins.flutter.io/webview', 'webview_flutter', 1),
+            ('plugin', 'plugins.it_nomads.com/flutter_secure_storage',
+             'flutter_secure_storage', 1),
+        ])
+
+    def test_dex_length_byte_may_be_a_letter(self):
+        # 48 characters: the dex length byte is '0'
+        name = b'com.example.app/' + b'b' * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                'lib/arm64-v8a/libapp.so': b'\x00' + name + b'\x00',
+                'classes2.dex': b'\x00' + bytes([len(name)]) + name + b'\x00',
+            })
+            res = binary_channels(
+                tmp, rels, Path(tmp) / 'lib/arm64-v8a/libapp.so', PACKAGES)
+        self.assertEqual(self._rows(res), [('app', name.decode(), None, 1)])
+
+    def test_dart_name_followed_by_other_data(self):
+        # Dart strings are not terminated; the next byte may be a letter
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                'lib/arm64-v8a/libapp.so': (
+                    b'\x00samples.flutter.dev/batteryX'
+                    b'\x00plugins.flutter.io/shared_preferencesX'),
+                'classes.dex': (
+                    b'\x00\x1bsamples.flutter.dev/battery\x00'
+                    b'\x00\x25plugins.flutter.io/shared_preferences\x00'),
+            })
+            res = binary_channels(
+                tmp, rels, Path(tmp) / 'lib/arm64-v8a/libapp.so', PACKAGES)
+        self.assertEqual(self._rows(res), [
+            ('app', 'samples.flutter.dev/battery', None, 1),
+            ('plugin', 'plugins.flutter.io/shared_preferences',
+             'shared_preferences', 1)])
+
+    def test_dex_wrong_length_byte_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                'lib/arm64-v8a/libapp.so': DART_CHANNELS,
+                'classes.dex': b'\x00\x05samples.flutter.dev/battery\x00',
+            })
+            res = binary_channels(
+                tmp, rels, Path(tmp) / 'lib/arm64-v8a/libapp.so', PACKAGES)
+        self.assertEqual([c for c in res if c['kind'] == 'app'], [])
+
+    def test_native_longer_name_does_not_confirm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                'lib/arm64-v8a/libapp.so': DART_CHANNELS,
+                'classes.dex': b'\x00\x1csamples.flutter.dev/battery2\x00',
+            })
+            res = binary_channels(
+                tmp, rels, Path(tmp) / 'lib/arm64-v8a/libapp.so', PACKAGES)
+        self.assertEqual([c for c in res if c['kind'] == 'app'], [])
+
+    def test_ios_main_executable_confirms(self):
+        app = 'Payload/Runner.app/'
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                app + 'Frameworks/App.framework/App': DART_CHANNELS,
+                app + 'Info.plist': plistlib.dumps(
+                    {'CFBundleExecutable': 'Runner'}),
+                app + 'Runner': b'\x00samples.flutter.dev/battery\x00',
+            })
+            res = binary_channels(
+                tmp, rels, Path(tmp) / (app + 'Frameworks/App.framework/App'),
+                PACKAGES)
+        self.assertIn(('app', 'samples.flutter.dev/battery', None, 1),
+                      self._rows(res))
+
+    def test_plugin_needs_detected_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {'lib/arm64-v8a/libapp.so': DART_CHANNELS})
+            res = binary_channels(
+                tmp, rels, Path(tmp) / 'lib/arm64-v8a/libapp.so', ['flutter'])
+        # 'flutter' alone matches no channel; nothing confirmed natively
+        self.assertEqual(self._rows(res), [
+            ('pigeon', 'dev.flutter.pigeon.webview_flutter_android.*',
+             'webview_flutter', 2)])
+
+    def test_no_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(binary_channels(tmp, [], None, PACKAGES), [])
+            self.assertEqual(binary_channels(
+                tmp, [], Path(tmp) / 'missing.so', PACKAGES), [])
+
+    def test_source_channels(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                tempfile.TemporaryDirectory() as outside:
+            root = Path(tmp)
+            self._app(tmp, {
+                'lib/main.dart': (
+                    b"const c = MethodChannel('samples.flutter.dev/battery');\n"
+                    b'final e = EventChannel("app.events/stream");\n'
+                    b'const m = BasicMessageChannel<String>(\n'
+                    b"    'app/messages', StringCodec());\n"
+                    b"final o = OptionalMethodChannel('x.y/z');\n"
+                    b"final d = MethodChannel('dynamic/$name');\n"),
+                'lib/src/again.dart':
+                    b"MethodChannel('samples.flutter.dev/battery')",
+                'build/generated.dart': b"MethodChannel('ignored.build/x')",
+            })
+            evil = Path(outside) / 'evil.dart'
+            evil.write_text("MethodChannel('evil.link/x')")
+            (root / 'lib' / 'link.dart').symlink_to(evil)
+            res = source_channels(root)
+        self.assertEqual(
+            [(c['kind'], c['name'], c['files']) for c in res], [
+                ('app', 'app.events/stream', ['lib/main.dart']),
+                ('app', 'app/messages', ['lib/main.dart']),
+                ('app', 'samples.flutter.dev/battery',
+                 ['lib/main.dart', 'lib/src/again.dart']),
+                ('app', 'x.y/z', ['lib/main.dart']),
+            ])
+
+
+class ChannelTemplateTests(SimpleTestCase):
+
+    def test_channels_rendered_escaped(self):
+        flutter = {'is_flutter': True, 'project_root': '.', 'packages': [],
+                   'deep_linking': {'android': False, 'ios': False},
+                   'osv': None, 'code_analysis': {}, 'assets': [],
+                   'asset_secrets': [],
+                   'findings': [], 'platform_channels': [
+                       {'name': 'evil/<script>x</script>', 'kind': 'app',
+                        'package': None, 'count': 1,
+                        'files': ['lib/<b>.dart']},
+                       {'name': 'dev.flutter.pigeon.webview_flutter_android.*',
+                        'kind': 'pigeon', 'package': 'webview_flutter',
+                        'count': 65, 'files': []}]}
+        for tpl in ('static_analysis/flutter/section.html',
+                    'pdf/flutter/section.html'):
+            html = render_to_string(tpl, {'flutter': flutter})
+            self.assertIn('evil/&lt;script&gt;x&lt;/script&gt;', html)
+            self.assertNotIn('<script>x', html)
+            self.assertIn('Pigeon (65 channels)', html)
+        self.assertIn('lib/&lt;b&gt;.dart', render_to_string(
+            'static_analysis/flutter/section.html', {'flutter': flutter}))

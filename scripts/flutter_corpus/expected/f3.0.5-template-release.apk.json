@@ -22,6 +22,7 @@
   "vector_math"
  ],
  "plugins": [],
+ "platform_channels": [],
  "deep_linking": null,
  "js_channels": false,
  "assets": [],

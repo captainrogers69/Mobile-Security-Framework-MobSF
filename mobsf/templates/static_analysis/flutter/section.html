@@ -100,6 +100,25 @@
             </div>
             {% endif %}
 
+            {% if flutter.platform_channels %}
+            <p><strong>PLATFORM CHANNELS</strong></p>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>CHANNEL</th><th>FROM</th><th>PACKAGE</th><th>FILES</th></tr></thead>
+                <tbody>
+                  {% for c in flutter.platform_channels %}
+                  <tr>
+                    <td><code>{{ c.name }}</code></td>
+                    <td>{% if c.kind == 'app' %}App{% elif c.kind == 'pigeon' %}Pigeon ({{ c.count }} channels){% else %}Plugin{% endif %}</td>
+                    <td>{{ c.package|default_if_none:"" }}</td>
+                    <td>{% for f in c.files %}{{ f }}<br/>{% endfor %}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+
             <p><strong>PACKAGES</strong></p>
             <p>
               {% if flutter.project_root %}

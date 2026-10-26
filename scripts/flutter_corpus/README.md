@@ -6,7 +6,7 @@ results.
 
 ## Apps
 
-Ordinary apps only, 8 builds per Flutter version. Files are named
+Ordinary apps only, 8 builds per Flutter version (11 with `channel_demo`). Files are named
 `f<flutter version>-<build>.<apk|ipa>`, e.g. `f3.44.9-template-release.apk`.
 
 | Flutter | Dart | Why |
@@ -16,13 +16,15 @@ Ordinary apps only, 8 builds per Flutter version. Files are named
 | 3.10.6 | 3.0 | first Dart 3 |
 | 3.0.5 | 2.17 | old snapshot format, Dart advisories of 2022, webview_flutter 3.x |
 
-32 apps in total.
+35 apps in total: `channel_demo` is built with 3.44.9 only so far (`APPS=channel_demo
+./build.sh` builds just that app).
 
 | App | Content | Builds |
 |---|---|---|
 | `template` | `flutter create` default app | Android release, debug, obfuscated; iOS release |
 | `plugins` | `shared_preferences`, `flutter_secure_storage`, `webview_flutter` | Android release, obfuscated; iOS release |
 | `http_demo` | `http` package, one HTTPS request | Android release (`http-release`) |
+| `channel_demo` | own platform channel `samples.flutter.dev/battery` (Flutter docs battery example, Kotlin and Swift) | Android release, obfuscated; iOS release (`channel-*`) |
 
 ## Use
 

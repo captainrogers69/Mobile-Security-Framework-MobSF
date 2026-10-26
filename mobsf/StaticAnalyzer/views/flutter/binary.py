@@ -3,6 +3,7 @@
 import logging
 
 from mobsf.StaticAnalyzer.views.flutter.advisories import check_advisories
+from mobsf.StaticAnalyzer.views.flutter.channels import binary_channels
 from mobsf.StaticAnalyzer.views.flutter.assets import (
     asset_secrets,
     audit_assets,
@@ -94,6 +95,8 @@ def flutter_binary_analysis(app_dir, rel_paths, platform,
         'obfuscated': obf['obfuscated'],
         'plugins': plugins,
         'packages': packages,
+        'platform_channels': binary_channels(
+            app_dir, rel_paths, snapshot, packages),
         'deep_linking': deep_linking,
         'js_channels': js_channels,
         'assets': assets,
