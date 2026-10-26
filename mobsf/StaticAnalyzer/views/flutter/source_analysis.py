@@ -14,6 +14,7 @@ from mobsf.StaticAnalyzer.views.flutter.assets import (
     asset_secrets,
     classify_assets,
 )
+from mobsf.StaticAnalyzer.views.flutter.channels import source_channels
 from mobsf.StaticAnalyzer.views.flutter.checks import (
     SEVERITY_ORDER,
     flutter_binary_checks,
@@ -154,6 +155,7 @@ def flutter_source_analysis(app_dir, osv_enabled=False, osv_session=None):
         'is_flutter': True,
         'project_root': root.relative_to(app_dir).as_posix(),
         'packages': packages,
+        'platform_channels': source_channels(root),
         'osv': osv,
         'deep_linking': deep_linking,
         'assets': assets,

@@ -17,6 +17,7 @@
  "split_debug_info": null,
  "packages": [],
  "plugins": [],
+ "platform_channels": [],
  "deep_linking": null,
  "js_channels": null,
  "assets": [],

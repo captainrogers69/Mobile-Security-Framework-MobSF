@@ -29,6 +29,14 @@
   "shared_preferences_foundation",
   "webview_flutter_wkwebview"
  ],
+ "platform_channels": [
+  "pigeon:dev.flutter.pigeon.shared_preferences_foundation.* (1)",
+  "pigeon:dev.flutter.pigeon.webview_flutter_wkwebview.* (65)",
+  "plugin:plugins.flutter.io/shared_preferences",
+  "plugin:plugins.flutter.io/webview",
+  "plugin:plugins.it_nomads.com/flutter_secure_storage",
+  "plugin:plugins.it_nomads.com/flutter_secure_storage/events"
+ ],
  "deep_linking": null,
  "js_channels": false,
  "assets": [],

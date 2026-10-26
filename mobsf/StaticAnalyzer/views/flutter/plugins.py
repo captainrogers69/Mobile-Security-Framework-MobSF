@@ -76,7 +76,7 @@ def _demangle_plugin(run):
     return module, cls
 
 
-def _ios_executable(app_dir, app_rel):
+def ios_executable(app_dir, app_rel):
     """Return the main executable path of a .app bundle, else None."""
     plist = safe_join(app_dir, f'{app_rel}/Info.plist')
     if plist is None:
@@ -133,7 +133,7 @@ def flutter_plugins(app_dir, rel_paths):
                 break
     for app_rel in sorted(app_bundles):
         try:
-            exe = _ios_executable(app_dir, app_rel)
+            exe = ios_executable(app_dir, app_rel)
             for match in (scan_regex(exe, MANGLED_RE) or [] if exe else []):
                 plugin = _demangle_plugin(match.group(1))
                 if plugin:

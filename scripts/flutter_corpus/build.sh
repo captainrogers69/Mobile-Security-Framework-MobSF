@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build a small corpus of ordinary Flutter apps.
 # Usage: build.sh [FLUTTER_BIN]   (default: flutter on PATH)
+# Optional: APPS="template plugins http_demo channel_demo" builds only these.
 # Optional: GRADLE_JAVA_HOME=<JDK 17> for old Flutter versions whose Gradle or
 # Android Gradle plugin does not run on newer Java (set per project only).
 # Apps go to apps/f<version>-<name>.<apk|ipa>.
@@ -80,12 +81,18 @@ ipa() {  # app out-name extra-args...
     (cd "$SRC/_ipa" && rm -f "$C/apps/f$VER-$out.ipa" && zip -qr "$C/apps/f$VER-$out.ipa" Payload) && log "built f$VER-$out.ipa" || log "FAILED $out"
 }
 
+APPS=${APPS:-template plugins http_demo channel_demo}
+want() { [[ " $APPS " == *" $1 "* ]]; }
+
+if want template; then
 mkapp template android,ios
 apk template template-release --release
 apk template template-debug --debug
 apk template template-obfuscated --release --obfuscate --split-debug-info="$SRC/symbols/template"
 ipa template template-ios-release
+fi
 
+if want plugins; then
 mkapp plugins android,ios
 add_deps plugins "$PLUGINS_PINS" "$PLUGINS_OVERRIDES" shared_preferences flutter_secure_storage webview_flutter
 # flutter_secure_storage needs minSdk 18, webview_flutter 19; old templates use 16
@@ -130,7 +137,9 @@ fi
 apk plugins plugins-release --release
 apk plugins plugins-obfuscated --release --obfuscate --split-debug-info="$SRC/symbols/plugins"
 ipa plugins plugins-ios-release
+fi
 
+if want http_demo; then
 mkapp http_demo android
 add_deps http_demo "$HTTP_PIN" "" http
 cat > http_demo/lib/main.dart <<'DART'
@@ -151,6 +160,105 @@ class StatusPage extends StatelessWidget {
 }
 DART
 apk http_demo http-release --release
+fi
+
+# App-defined platform channel, as in Flutter's "Writing custom
+# platform-specific code" docs (battery level)
+if want channel_demo; then
+mkapp channel_demo android,ios
+cat > channel_demo/lib/main.dart <<'DART'
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+void main() => runApp(const MaterialApp(home: BatteryPage()));
+
+class BatteryPage extends StatefulWidget {
+  const BatteryPage({super.key});
+  @override
+  State<BatteryPage> createState() => _BatteryPageState();
+}
+
+class _BatteryPageState extends State<BatteryPage> {
+  static const platform = MethodChannel('samples.flutter.dev/battery');
+  String _level = 'Unknown battery level.';
+
+  Future<void> _getBatteryLevel() async {
+    String level;
+    try {
+      final result = await platform.invokeMethod<int>('getBatteryLevel');
+      level = 'Battery level at $result % .';
+    } on PlatformException catch (e) {
+      level = "Failed to get battery level: '${e.message}'.";
+    }
+    setState(() => _level = level);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ElevatedButton(onPressed: _getBatteryLevel, child: const Text('Get Battery Level')),
+            Text(_level),
+          ]),
+        ),
+      );
+}
+DART
+cat > channel_demo/android/app/src/main/kotlin/com/example/channel_demo/MainActivity.kt <<'KT'
+package com.example.channel_demo
+
+import android.content.Context
+import android.os.BatteryManager
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+
+class MainActivity : FlutterActivity() {
+  private val channel = "samples.flutter.dev/battery"
+
+  override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+    super.configureFlutterEngine(flutterEngine)
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel).setMethodCallHandler { call, result ->
+      if (call.method == "getBatteryLevel") {
+        val manager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        result.success(manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY))
+      } else {
+        result.notImplemented()
+      }
+    }
+  }
+}
+KT
+# Register next to the generated plugins; templates differ by version
+sed -i '' -E 's/^([[:space:]]*)GeneratedPluginRegistrant\.register\(with: ([^)]+)\)/&\
+\1BatteryChannel.register(with: \2)/' channel_demo/ios/Runner/AppDelegate.swift
+cat >> channel_demo/ios/Runner/AppDelegate.swift <<'SWIFT'
+
+enum BatteryChannel {
+  static func register(with registry: FlutterPluginRegistry) {
+    guard let registrar = registry.registrar(forPlugin: "BatteryChannel") else { return }
+    let channel = FlutterMethodChannel(
+      name: "samples.flutter.dev/battery", binaryMessenger: registrar.messenger())
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "getBatteryLevel" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      UIDevice.current.isBatteryMonitoringEnabled = true
+      let level = UIDevice.current.batteryLevel
+      if level < 0 {
+        result(FlutterError(code: "UNAVAILABLE", message: "Battery level not available", details: nil))
+      } else {
+        result(Int(level * 100))
+      }
+    }
+  }
+}
+SWIFT
+apk channel_demo channel-release --release
+apk channel_demo channel-obfuscated --release --obfuscate --split-debug-info="$SRC/symbols/channel_demo"
+ipa channel_demo channel-ios-release
+fi
 # Build trees are large; keep sources, drop intermediates
 rm -rf "$SRC"/*/build "$SRC"/*/.dart_tool "$SRC"/*/ios/Pods "$SRC"/*/android/.gradle
 log "done"; ls -la "$C/apps"/f"$VER"-*

@@ -109,7 +109,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | F8 | Pub package inventory | 🟡 | 2026-10-26 | Names from Dart `package:` URIs (non-obfuscated) + native plugin inventory `flutter/plugins.py` (Android `GeneratedPluginRegistrant` strings in dex, iOS Swift mangled plugin classes / CocoaPods frameworks; works on obfuscated apps). APK/IPA inventory leaves out desktop-only helpers (`win32`, `win32_registry`, `xdg_directories`). Versions need F7 or `pubspec.lock` (F19) |
 | F10 | Insecure storage | ✅ | 2026-10-26 | Package level (`checks.py`) + Dart rule `dart_prefs_sensitive` (sensitive keys in SharedPreferences, warning) |
 | F11 | TLS / pinning checks | ✅ | 2026-10-26 | Package level + Dart rules: `badCertificateCallback` returning true (high), `HttpOverrides.global` (info), `SecurityContext` pinning (good). Binary: callback leaves no trace, source only |
-| F12 | Platform-channel enumeration | ⬜ | | |
+| F12 | Platform-channel enumeration | ✅ | 2026-10-26 | `flutter/channels.py`, list only (no findings). APK/IPA: plugin channels (name matches a detected package), app channels (exact native string in dex / iOS executable that the Dart snapshot also contains), Pigeon channels per package; engine and unattributed names left out. Works on obfuscated apps. Project ZIPs: `MethodChannel`/`EventChannel`/`BasicMessageChannel` names in Dart sources, with files. Web report, PDF, API, CLI. Corpus app `channel_demo` |
 | F13 | WebView plugin checks | ✅ | 2026-10-26 | Package level; binary: `addJavaScriptChannel` name (non-obfuscated); Dart rules: unrestricted JS (warning), JS channels/handlers (info) |
 | F14 | Root/jailbreak/tamper detection presence | ✅ | 2026-10-26 | Package level: detection package good / absent info (resilience-1). Package names verified on pub.dev |
 | F15 | Deep links vs manifest/plist | ✅ | 2026-10-26 | `deeplinks.py`: `flutter_deeplinking_enabled` (manifest) / `FlutterDeepLinkingEnabled` (Info.plist) → info (cwe-939, platform-1), APK/IPA and project ZIP |
@@ -182,3 +182,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | N5 started: Flutter corpus regression check (8 apps). CLI no longer logs scan-database errors |
 | 2026-10-26 | N5: corpus with 4 Flutter versions (32 apps). JS channel check no longer flags every webview_flutter 2.x/3.x app |
 | 2026-10-26 | Exact Dart version from the Flutter version (also for debug builds); desktop-only packages left out of APK/IPA inventory. Corpus 32/32 |
+| 2026-10-26 | F12 platform channels (list). Corpus app `channel_demo` (3.44.9), 35/35 |
