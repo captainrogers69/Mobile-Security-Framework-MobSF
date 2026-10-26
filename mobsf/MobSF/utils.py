@@ -54,6 +54,7 @@ SCAN_STATE_FILES = (
     'gadget-mode',
     'frida-owner',
     'split-apks.json',
+    'flutter.json',
 )
 # Regex to capture strings between quotes or <string> tag
 STRINGS_REGEX = re.compile(r'(?<=\")(.+?)(?=\")|(?<=\<string>)(.+?)(?=\<)')

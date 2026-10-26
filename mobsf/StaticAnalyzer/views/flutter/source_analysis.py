@@ -2,6 +2,7 @@
 """Flutter analysis entry point for Flutter project (source) ZIPs."""
 import logging
 import plistlib
+from pathlib import Path
 
 from defusedxml.minidom import parseString
 
@@ -136,6 +137,7 @@ def flutter_source_analysis(app_dir, osv_enabled=False, osv_session=None):
     osv_enabled sends locked hosted package names and versions to
     api.osv.dev; callers gate it behind a setting.
     """
+    app_dir = Path(app_dir)
     root = is_flutter_source(app_dir)
     if root is None:
         return {'is_flutter': False}
@@ -150,7 +152,7 @@ def flutter_source_analysis(app_dir, osv_enabled=False, osv_session=None):
                 + _osv_findings(osv))
     return {
         'is_flutter': True,
-        'project_root': root.as_posix(),
+        'project_root': root.relative_to(app_dir).as_posix(),
         'packages': packages,
         'osv': osv,
         'deep_linking': deep_linking,

@@ -6,13 +6,15 @@ import random
 import re
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from defusedxml.minidom import parseString
 
 import requests
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
+from mobsf.MobSF.utils import scan_state_file
 from mobsf.StaticAnalyzer.views.common.binary.elf import ELFChecksec
 from mobsf.StaticAnalyzer.views.flutter.advisories import (
     check_advisories,
@@ -49,6 +51,12 @@ from mobsf.StaticAnalyzer.views.flutter.engine import (
     flutter_from_engine,
     flutter_from_framework_plist,
     load_flutter_engines,
+)
+from mobsf.StaticAnalyzer.views.flutter.integration import (
+    load_result,
+    save_result,
+    scan_binary,
+    scan_source,
 )
 from mobsf.StaticAnalyzer.views.flutter.obfuscation import (
     obfuscation_info,
@@ -1735,3 +1743,99 @@ class SourceAnalysisTests(SimpleTestCase):
             self._project(tmp, {'app/src/main/AndroidManifest.xml': 'x'})
             self.assertEqual(flutter_source_analysis(tmp),
                              {'is_flutter': False})
+
+
+TEST_MD5 = 'f1a7f1a7f1a7f1a7f1a7f1a7f1a7f1a7'
+
+
+class IntegrationTests(SimpleTestCase):
+
+    def setUp(self):
+        self.home = tempfile.TemporaryDirectory()
+        # utils reads the settings module directly, so override_settings
+        # does not reach scan_state_root(); patch it instead
+        self.patch = mock.patch(
+            'mobsf.MobSF.utils.scan_state_root',
+            return_value=Path(self.home.name) / 'scan_state')
+        self.patch.start()
+        # Never touch the real MobSF home from tests
+        self.assertTrue(str(scan_state_file(TEST_MD5, 'flutter.json'))
+                        .startswith(self.home.name))
+
+    def tearDown(self):
+        self.patch.stop()
+        self.home.cleanup()
+
+    def _app(self, tmp, files):
+        for rel, data in files.items():
+            path = Path(tmp) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data if isinstance(data, bytes)
+                             else data.encode())
+
+    def test_save_and_load(self):
+        save_result(TEST_MD5, {'is_flutter': True, 'findings': []})
+        self.assertEqual(load_result(TEST_MD5),
+                         {'is_flutter': True, 'findings': []})
+
+    def test_load_missing_or_invalid(self):
+        self.assertIsNone(load_result(TEST_MD5))
+        self.assertIsNone(load_result('../../etc/passwd'))
+        path = scan_state_file(TEST_MD5, 'flutter.json')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{not json')
+        self.assertIsNone(load_result(TEST_MD5))
+        path.write_text('["not", "a", "dict"]')
+        self.assertIsNone(load_result(TEST_MD5))
+
+    def test_symlinked_state_file_ignored(self):
+        target = Path(self.home.name) / 'elsewhere.json'
+        target.write_text('{"is_flutter": true}')
+        path = scan_state_file(TEST_MD5, 'flutter.json')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.symlink(target, path)
+        except (OSError, NotImplementedError):
+            self.skipTest('symlinks not supported')
+        self.assertIsNone(load_result(TEST_MD5))
+
+    def test_scan_binary_saves_flutter_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._app(tmp, ANDROID_APP)
+            res = scan_binary(TEST_MD5, tmp, 'android')
+        self.assertTrue(res['is_flutter'])
+        self.assertEqual(load_result(TEST_MD5)['flutter'], ['3.44.9'])
+
+    def test_scan_binary_non_flutter_saves_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._app(tmp, {'classes.dex': b'dex'})
+            res = scan_binary(TEST_MD5, tmp, 'android')
+        self.assertFalse(res['is_flutter'])
+        self.assertIsNone(load_result(TEST_MD5))
+
+    def test_scan_binary_ios_reads_info_plist(self):
+        files = {
+            IOS_APP + 'Info.plist': plistlib.dumps(
+                {'CFBundleExecutable': 'Runner',
+                 'FlutterDeepLinkingEnabled': True}),
+            IOS_FW + 'Flutter': b'\xcf\xfa\xed\xfe',
+            IOS_FW + 'Info.plist': _framework_plist(),
+            IOS_APP + 'Frameworks/App.framework/App': _libapp(
+                b'product no-dwarf_stack_traces_mode arm64 ios'),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            self._app(tmp, files)
+            res = scan_binary(TEST_MD5, tmp, 'ios')
+        self.assertTrue(res['deep_linking'])
+
+    def test_scan_source_respects_osv_setting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._app(tmp, PROJECT_FILES)
+            with override_settings(FLUTTER_OSV_ENABLED=False):
+                res = scan_source(TEST_MD5, tmp)
+        self.assertIsNone(res['osv'])
+        self.assertEqual(res['project_root'], '.')
+        self.assertTrue(load_result(TEST_MD5)['is_flutter'])
+
+    def test_errors_do_not_raise(self):
+        self.assertIsNone(scan_binary('not-an-md5', '/nonexistent', 'android'))

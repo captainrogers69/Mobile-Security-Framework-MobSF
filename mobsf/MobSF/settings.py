@@ -362,6 +362,9 @@ if RUNSERVER:
         'propagate': False,
     }
 
+# Flutter: look up pubspec.lock packages on api.osv.dev. Sends dependency
+# names and versions to a third party, so it is off by default.
+FLUTTER_OSV_ENABLED = env_flag('MOBSF_FLUTTER_OSV_ENABLED', '0')
 ASYNC_ANALYSIS = env_flag('MOBSF_ASYNC_ANALYSIS', '0')
 ASYNC_ANALYSIS_TIMEOUT = int(os.getenv('MOBSF_ASYNC_ANALYSIS_TIMEOUT', '60'))
 Q_CLUSTER = {
