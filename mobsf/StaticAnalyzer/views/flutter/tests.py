@@ -1,10 +1,14 @@
 """Unit tests for Flutter detection."""
+import io
 import json
 import os
 import plistlib
 import random
 import re
+import subprocess
+import sys
 import tempfile
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -12,6 +16,8 @@ from defusedxml.minidom import parseString
 
 import requests
 
+from django.conf import settings
+from django.core.management import call_command
 from django.test import SimpleTestCase, override_settings
 
 from mobsf.MobSF.utils import scan_state_file
@@ -33,6 +39,7 @@ from mobsf.StaticAnalyzer.views.flutter.checks import (
     flutter_checks,
     load_check_packages,
 )
+from mobsf.StaticAnalyzer.views.flutter.cli import scan_path
 from mobsf.StaticAnalyzer.views.flutter.dart_analysis import (
     dart_code_analysis,
     load_dart_rules,
@@ -77,6 +84,10 @@ from mobsf.StaticAnalyzer.views.flutter.source import (
 )
 from mobsf.StaticAnalyzer.views.flutter.source_analysis import (
     flutter_source_analysis,
+)
+from mobsf.StaticAnalyzer.views.flutter.sarif import (
+    redact_secret,
+    to_sarif,
 )
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
@@ -1918,3 +1929,180 @@ class FlutterZipSourceTypeTests(SimpleTestCase):
                 'app/src/main/AndroidManifest.xml': MANIFEST.format(meta=''),
                 'app/src/main/java/A.java': ''})
             self.assertEqual(self._check(tmp), ('studio', True))
+
+
+SARIF_RESULT = {
+    'is_flutter': True,
+    'project_root': 'demo',
+    'findings': [
+        {'id': 'flutter_debug_build', 'severity': 'high',
+         'title': 'Flutter debug build', 'description': 'Debug build.',
+         'packages': [], 'cwe': 'cwe-489', 'masvs': 'code-2'},
+        {'id': 'flutter_webview', 'severity': 'info',
+         'title': 'WebView', 'description': 'WebView.',
+         'packages': ['webview_flutter'], 'cwe': 'cwe-749',
+         'masvs': 'platform-7'},
+        {'id': 'flutter_secure_storage', 'severity': 'good',
+         'title': 'Encrypted storage', 'description': 'Good.',
+         'packages': [], 'cwe': '', 'masvs': 'storage-1'},
+    ],
+    'code_analysis': {
+        'dart_bad_certificate_callback': {
+            'files': {'lib/main.dart': '9', 'lib/net.dart': '3,4'},
+            'metadata': {'description': 'Accepts any cert.',
+                         'severity': 'high', 'cwe': 'CWE-295: Improper',
+                         'masvs': 'MSTG-NETWORK-3'}},
+    },
+    'asset_secrets': [
+        {'file': '.env', 'secrets': ['"API_KEY" : "abc123secret"',
+                                     f'GitHub token: {FAKE_GH_TOKEN}']}],
+}
+
+
+class SarifTests(SimpleTestCase):
+
+    def test_structure(self):
+        sarif = to_sarif(SARIF_RESULT)
+        self.assertEqual(sarif['version'], '2.1.0')
+        self.assertIn('sarif-schema-2.1.0', sarif['$schema'])
+        driver = sarif['runs'][0]['tool']['driver']
+        self.assertEqual(driver['name'], 'MobSF Flutter')
+        rule_ids = {r['id'] for r in driver['rules']}
+        self.assertEqual(rule_ids, {
+            'flutter_debug_build', 'flutter_webview',
+            'dart_bad_certificate_callback', 'flutter_asset_secret'})
+
+    def test_levels_and_good_excluded(self):
+        results = to_sarif(SARIF_RESULT)['runs'][0]['results']
+        levels = {r['ruleId']: r['level'] for r in results}
+        self.assertEqual(levels['flutter_debug_build'], 'error')
+        self.assertEqual(levels['flutter_webview'], 'note')
+        self.assertNotIn('flutter_secure_storage', levels)
+
+    def test_rule_metadata(self):
+        rules = {r['id']: r for r in
+                 to_sarif(SARIF_RESULT)['runs'][0]['tool']['driver']['rules']}
+        rule = rules['flutter_debug_build']
+        self.assertEqual(rule['properties']['security-severity'], '8.0')
+        self.assertIn('CWE-489', rule['properties']['tags'])
+        self.assertIn('MASVS-CODE-2', rule['properties']['tags'])
+
+    def test_dart_locations_one_per_line(self):
+        results = [r for r in to_sarif(SARIF_RESULT)['runs'][0]['results']
+                   if r['ruleId'] == 'dart_bad_certificate_callback']
+        locs = sorted(
+            (loc['physicalLocation']['artifactLocation']['uri'],
+             loc['physicalLocation']['region']['startLine'])
+            for r in results for loc in r['locations'])
+        self.assertEqual(locs, [('demo/lib/main.dart', 9),
+                                ('demo/lib/net.dart', 3),
+                                ('demo/lib/net.dart', 4)])
+
+    def test_secrets_redacted(self):
+        text = json.dumps(to_sarif(SARIF_RESULT))
+        self.assertNotIn('abc123secret', text)
+        self.assertNotIn(FAKE_GH_TOKEN, text)
+        # Key names stay visible (quotes are JSON-escaped in the dump)
+        self.assertIn('API_KEY', text)
+        secret = [r for r in to_sarif(SARIF_RESULT)['runs'][0]['results']
+                  if r['ruleId'] == 'flutter_asset_secret'][0]
+        self.assertEqual(
+            secret['locations'][0]['physicalLocation']['artifactLocation']
+            ['uri'], 'demo/.env')
+
+    def test_redact(self):
+        self.assertEqual(redact_secret('"API_KEY" : "abc123secret"'),
+                         '"API_KEY" : "abc1****"')
+        self.assertEqual(redact_secret(f'GitHub token: {FAKE_GH_TOKEN}'),
+                         'GitHub token: ghp_****')
+        self.assertEqual(redact_secret('short'), '****')
+
+    def test_non_flutter(self):
+        sarif = to_sarif({'is_flutter': False})
+        self.assertEqual(sarif['runs'][0]['results'], [])
+
+
+class CLITests(SimpleTestCase):
+
+    def _zip(self, tmp, files, name):
+        path = Path(tmp) / name
+        with zipfile.ZipFile(path, 'w') as zf:
+            for rel, data in files.items():
+                zf.writestr(rel, data)
+        return path
+
+    def test_scan_apk_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = self._zip(tmp, ANDROID_APP, 'app.apk')
+            res = scan_path(apk)
+        self.assertTrue(res['is_flutter'])
+        self.assertEqual(res['platform'], 'android')
+        self.assertEqual(res['flutter'], ['3.44.9'])
+
+    def test_scan_project_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel, data in PROJECT_FILES.items():
+                path = Path(tmp) / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(data)
+            res = scan_path(tmp)
+        self.assertEqual(res['project_root'], '.')
+        self.assertIsNone(res['osv'])
+
+    def test_scan_ipa_detects_ios(self):
+        files = {
+            IOS_APP + 'Info.plist': plistlib.dumps(
+                {'CFBundleExecutable': 'Runner'}),
+            IOS_FW + 'Flutter': b'\xcf\xfa\xed\xfe',
+            IOS_FW + 'Info.plist': _framework_plist(),
+            IOS_APP + 'Frameworks/App.framework/App': _libapp(),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            res = scan_path(self._zip(tmp, files, 'app.ipa'))
+        self.assertEqual(res['platform'], 'ios')
+
+    def test_zip_slip_member_not_extracted(self):
+        files = dict(ANDROID_APP)
+        files['../../evil.txt'] = b'x'
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = self._zip(tmp, files, 'app.apk')
+            res = scan_path(apk)
+            self.assertFalse((Path(tmp).parent / 'evil.txt').exists())
+        self.assertTrue(res['is_flutter'])
+
+    def test_missing_path(self):
+        with self.assertRaises(FileNotFoundError):
+            scan_path('/nonexistent/app.apk')
+
+    def test_command_json_sarif_and_fail_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = self._zip(tmp, ANDROID_APP, 'app.apk')
+            out = Path(tmp) / 'out.sarif'
+            call_command('flutter_scan', str(apk), '--format', 'sarif',
+                         '--output', str(out))
+            sarif = json.loads(out.read_text())
+            self.assertEqual(sarif['version'], '2.1.0')
+            self.assertTrue(sarif['runs'][0]['results'])
+            buf = io.StringIO()
+            call_command('flutter_scan', str(apk), stdout=buf)
+            self.assertTrue(json.loads(buf.getvalue())['is_flutter'])
+            # The sample has a high advisory finding
+            with self.assertRaises(SystemExit) as ctx:
+                call_command('flutter_scan', str(apk), '--fail-on', 'high',
+                             stdout=io.StringIO())
+            self.assertEqual(ctx.exception.code, 1)
+
+
+class CLIStdoutTests(SimpleTestCase):
+
+    def test_stdout_is_clean_json_without_api_key(self):
+        manage = Path(settings.BASE_DIR).parent / 'manage.py'
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = CLITests()._zip(tmp, ANDROID_APP, 'app.apk')
+            proc = subprocess.run(
+                [sys.executable, str(manage), 'flutter_scan', str(apk)],
+                capture_output=True, text=True, timeout=300,
+                env={**os.environ, 'MOBSF_DISABLE_AUTHENTICATION': '1'})
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        self.assertNotIn('REST API Key', proc.stdout)
+        self.assertTrue(json.loads(proc.stdout)['is_flutter'])
