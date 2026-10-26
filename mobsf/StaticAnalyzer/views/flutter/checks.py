@@ -1,0 +1,101 @@
+# -*- coding: utf_8 -*-
+"""Flutter security checks based on the packages an app uses.
+
+Packages come from the native plugin inventory (works on obfuscated apps)
+and the Dart package: URIs (non-obfuscated apps, also pure Dart packages).
+Presence of a package does not prove misuse, so severities stay
+conservative; protections present are reported as 'good', as MobSF does
+for root detection and SSL pinning.
+"""
+import json
+from functools import lru_cache
+from pathlib import Path
+
+DATA_FILE = Path(__file__).resolve().parent / 'flutter_check_packages.json'
+SEVERITY_ORDER = {'high': 0, 'warning': 1, 'info': 2, 'good': 3}
+
+
+@lru_cache(maxsize=1)
+def load_check_packages():
+    """Load package groups used by the checks."""
+    with DATA_FILE.open(encoding='utf-8') as fobj:
+        return json.load(fobj)
+
+
+def _finding(fid, severity, title, description, packages, cwe, masvs):
+    return {
+        'id': fid,
+        'severity': severity,
+        'title': title,
+        'description': description,
+        'packages': sorted(packages),
+        'cwe': cwe,
+        'masvs': masvs,
+    }
+
+
+def flutter_checks(packages):
+    """Return Flutter findings for a set of app-facing package names."""
+    used = set(packages)
+    groups = {k: used & set(v) for k, v in load_check_packages().items()}
+    findings = []
+    if groups['insecure_storage']:
+        if groups['secure_storage']:
+            severity = 'info'
+            desc = ('The app uses unencrypted storage packages together '
+                    'with encrypted storage. Ensure tokens, keys and '
+                    'personal data are only stored in the encrypted '
+                    'storage.')
+        else:
+            severity = 'warning'
+            desc = ('The app uses unencrypted storage packages and no '
+                    'encrypted storage package. Data written there is '
+                    'stored in plaintext on the device; do not store '
+                    'tokens, keys or personal data in it.')
+        findings.append(_finding(
+            'flutter_insecure_storage', severity,
+            'Unencrypted local storage', desc,
+            groups['insecure_storage'], 'cwe-312', 'storage-1'))
+    if groups['secure_storage']:
+        findings.append(_finding(
+            'flutter_secure_storage', 'good',
+            'Encrypted local storage',
+            'The app uses encrypted storage (Android Keystore / iOS '
+            'Keychain backed) for sensitive data.',
+            groups['secure_storage'], '', 'storage-1'))
+    if groups['ssl_pinning']:
+        findings.append(_finding(
+            'flutter_ssl_pinning', 'good',
+            'SSL certificate pinning',
+            'The app uses a certificate pinning package.',
+            groups['ssl_pinning'], '', 'network-4'))
+    else:
+        findings.append(_finding(
+            'flutter_no_ssl_pinning', 'info',
+            'No SSL pinning package',
+            'No certificate pinning package was found. Pinning can also be '
+            'implemented in Dart code (SecurityContext, '
+            'badCertificateCallback), which this check does not detect.',
+            [], 'cwe-295', 'network-4'))
+    if groups['webview']:
+        findings.append(_finding(
+            'flutter_webview', 'info',
+            'WebView in Flutter app',
+            'The app embeds a WebView. Review JavaScript settings, '
+            'JavaScript channels exposed to web content and which URLs '
+            'can be loaded.',
+            groups['webview'], 'cwe-749', 'platform-7'))
+    if groups['root_detection']:
+        findings.append(_finding(
+            'flutter_root_detection', 'good',
+            'Root/jailbreak detection',
+            'The app uses a root/jailbreak or tamper detection package.',
+            groups['root_detection'], '', 'resilience-1'))
+    else:
+        findings.append(_finding(
+            'flutter_no_root_detection', 'info',
+            'No root/jailbreak detection package',
+            'No root/jailbreak or tamper detection package was found.',
+            [], '', 'resilience-1'))
+    return sorted(
+        findings, key=lambda f: (SEVERITY_ORDER[f['severity']], f['id']))

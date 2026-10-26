@@ -1,0 +1,7 @@
+{
+ "insecure_storage": ["shared_preferences", "hive", "hive_flutter", "hive_ce", "sqflite", "get_storage"],
+ "secure_storage": ["flutter_secure_storage", "encrypted_shared_preferences", "sqflite_sqlcipher"],
+ "ssl_pinning": ["http_certificate_pinning", "ssl_pinning_plugin"],
+ "webview": ["webview_flutter", "flutter_inappwebview", "flutter_webview_plugin"],
+ "root_detection": ["flutter_jailbreak_detection", "freerasp", "safe_device", "trust_fall"]
+}

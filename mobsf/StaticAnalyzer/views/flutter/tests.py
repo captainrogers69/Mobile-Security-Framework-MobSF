@@ -17,6 +17,10 @@ from mobsf.StaticAnalyzer.views.flutter.assets import (
     asset_secrets,
     audit_assets,
 )
+from mobsf.StaticAnalyzer.views.flutter.checks import (
+    flutter_checks,
+    load_check_packages,
+)
 from mobsf.StaticAnalyzer.views.flutter.detect import (
     detect_flutter,
     flutter_from_dir,
@@ -1034,3 +1038,54 @@ class PluginInventoryTests(SimpleTestCase):
                            ('webview_flutter_wkwebview', 'webview_flutter'),
                            ('jni', 'jni'), ('local_auth_ios', 'local_auth')):
             self.assertEqual(base_package(name), base)
+
+
+class FlutterChecksTests(SimpleTestCase):
+
+    def _sev(self, res):
+        return {f['id']: f['severity'] for f in res}
+
+    def test_real_plugin_sample(self):
+        res = flutter_checks({'shared_preferences', 'flutter_secure_storage',
+                              'webview_flutter', 'jni', 'jni_flutter'})
+        self.assertEqual(self._sev(res), {
+            'flutter_insecure_storage': 'info',
+            'flutter_secure_storage': 'good',
+            'flutter_webview': 'info',
+            'flutter_no_ssl_pinning': 'info',
+            'flutter_no_root_detection': 'info'})
+
+    def test_insecure_storage_without_secure_storage(self):
+        res = flutter_checks({'hive'})
+        storage = [f for f in res if f['id'] == 'flutter_insecure_storage'][0]
+        self.assertEqual(storage['severity'], 'warning')
+        self.assertEqual(storage['packages'], ['hive'])
+        self.assertEqual(storage['cwe'], 'cwe-312')
+        self.assertEqual(storage['masvs'], 'storage-1')
+
+    def test_protections_present(self):
+        res = flutter_checks({'freerasp', 'http_certificate_pinning'})
+        self.assertEqual(self._sev(res), {
+            'flutter_ssl_pinning': 'good',
+            'flutter_root_detection': 'good'})
+
+    def test_no_packages(self):
+        self.assertEqual(self._sev(flutter_checks([])), {
+            'flutter_no_ssl_pinning': 'info',
+            'flutter_no_root_detection': 'info'})
+
+    def test_sorted_by_severity(self):
+        res = flutter_checks({'hive', 'flutter_inappwebview', 'freerasp'})
+        order = ['high', 'warning', 'info', 'good']
+        sev = [order.index(f['severity']) for f in res]
+        self.assertEqual(sev, sorted(sev))
+
+    def test_package_lists(self):
+        groups = load_check_packages()
+        for name in ('insecure_storage', 'secure_storage', 'ssl_pinning',
+                     'webview', 'root_detection'):
+            self.assertTrue(groups[name])
+            for pkg in groups[name]:
+                self.assertRegex(pkg, r'^[a-z][a-z0-9_]*$')
+        self.assertFalse(set(groups['insecure_storage'])
+                         & set(groups['secure_storage']))
