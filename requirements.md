@@ -153,6 +153,23 @@ Goal: get the Flutter work merged into upstream MobSF later.
 - F27. REST API parity for every new feature.
 - F28. Scan comparison between app versions (diff findings).
 
+### 6.7 False-positive reduction (P0)
+The maintainer named false positives as the main past pain with Flutter (MobSF#2722).
+Measured on a real Flutter 3.44 release APK with no real secrets: 12 of 12 reported
+secrets were noise, 15 of 76 code-analysis hits were in Flutter's own embedding code.
+- F30. Skip Flutter's embedding Java (`io/flutter/`) in Android code analysis, like the
+  existing skips for `androidx/`, `kotlin/` (precedent: MobSF#2733, skip JetBrains classes).
+- F31. No secret/URL extraction from `libflutter.so`: Google's prebuilt engine is
+  byte-identical across apps of a Flutter version and cannot hold app secrets.
+- F32. Drop known Flutter identifiers from secrets: Dart snapshot hash, engine and
+  component revisions, build-path IDs compiled into `libapp.so`.
+- F33. Ignore fixed constants of common plugins (e.g. `flutter_secure_storage`
+  base64 prefixes) in secret detection.
+- F34. Native libraries analysed twice (APK copy and `apktool_out/` copy), doubling
+  native findings for every app, not only Flutter. Confirm cause before fixing.
+- Already upstream: checksec findings (stack canary, RELRO, FORTIFY) suppressed for
+  Dart/Flutter libraries via `ELFChecksec.is_dart()` (MobSF #2358, #1968).
+
 ## 7. Non-functional requirements
 
 - N1. Security: follow `CLAUDE.md` — all APK/IPA/ZIP/snapshot data is attacker-controlled.
