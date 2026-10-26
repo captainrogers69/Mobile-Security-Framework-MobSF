@@ -29,6 +29,9 @@ STATE_NAME = 'flutter.json'
 MAX_RESULT_SIZE = 20 * 1024 * 1024
 MAX_FILES = 300000
 PLIST_MAX_SIZE = 1024 * 1024
+# MobSF output in the scan folder: apktool's copy of the APK and the
+# decompiled sources (left over on rescans)
+MOBSF_OUTPUT_DIRS = ('apktool_out', 'java_source', 'smali_source')
 
 
 def save_result(checksum, result):
@@ -61,8 +64,10 @@ def load_result(checksum):
 def _rel_files(app_dir):
     """Relative posix paths of files under app_dir (links not followed)."""
     files = []
-    for root, _dirs, names in os.walk(app_dir):
+    for root, dirs, names in os.walk(app_dir):
         rel_root = os.path.relpath(root, app_dir)
+        if rel_root == '.':
+            dirs[:] = [d for d in dirs if d not in MOBSF_OUTPUT_DIRS]
         for name in names:
             files.append(Path(rel_root, name).as_posix()
                          if rel_root != '.' else name)
