@@ -174,5 +174,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | Plugin inventory from native code (1222a62d) and package-based checks F10/F11/F13/F14 (5199cb48); identical findings on Android, obfuscated Android and iOS builds. 103 Flutter tests |
 | 2026-10-26 | Binary deep-link + JS channel checks (b9e6b32b); source ZIP pieces: project detection + pubspec.lock (1d3fe39f), OSV (99bfed64), Dart rules (69393baf); entry points `flutter_binary_analysis` (ea141720) and `flutter_source_analysis` (cd493508). 142 Flutter tests, full suite 177 (same 2 local integration failures) |
 | 2026-10-26 | Flutter analysis wired into the fork's MobSF (3a6c48f2, f403035e; PR #10): scans, web/PDF reports, JSON API; Flutter project ZIPs now scannable. E2E verified on isolated instance; full suite 190 tests (2 known local failures) |
-
 | 2026-10-26 | Maintainer replied on #2722 (small iterative PRs, no third-party binaries, fewer false positives). Measured false positives on a real Flutter APK; added F30–F34. #2722 follow-up posted with small-PR plan. Upstream PR #2734 (Flutter source ZIPs) open |
