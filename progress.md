@@ -15,7 +15,7 @@ date and notes as work lands. Last updated: 2026-10-25
 | Phase 0 — Services & credentials | 1 | 3 | 🟡 |
 | Upstream contribution | 3 | 6 | 🟡 |
 | Phase 1 — Detection & strings | 7 | 9 | 🟡 |
-| Phase 2 — Snapshot, checks, CLI | 0 | 11 | ⬜ |
+| Phase 2 — Snapshot, checks, CLI | 0 | 11 | 🟡 |
 | Phase 3 — Source ZIP | 0 | 4 | ⬜ |
 | Phase 4 — Dynamic (Android) | 0 | 4 | ⬜ |
 | Phase 5 — Diff, iOS, hardening | 0 | 1 | ⬜ |
@@ -92,12 +92,12 @@ date and notes as work lands. Last updated: 2026-10-25
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
 | F7 | Symbol / object-pool recovery | ❓ | 2026-10-23 | Parser choice per U4: blutter recommended (arm64, per-Dart-version build → N2 cache) |
-| F8 | Pub package inventory | 🟡 | 2026-10-26 | Package names from `package:` URIs in non-obfuscated snapshots (`obfuscation_info()['packages']`). Versions need F7 |
-| F10 | Insecure storage | ⬜ | | |
-| F11 | TLS / pinning checks | ⬜ | | |
+| F8 | Pub package inventory | 🟡 | 2026-10-26 | Names from Dart `package:` URIs (non-obfuscated) + native plugin inventory `flutter/plugins.py` (Android `GeneratedPluginRegistrant` strings in dex, iOS Swift mangled plugin classes / CocoaPods frameworks; works on obfuscated apps). Versions need F7 or `pubspec.lock` (F19) |
+| F10 | Insecure storage | 🟡 | 2026-10-26 | Package level in `flutter/checks.py`: unencrypted storage without encrypted storage → warning, with → info, encrypted storage → good (cwe-312, storage-1). Code-level checks: Dart rules (F20) |
+| F11 | TLS / pinning checks | 🟡 | 2026-10-26 | Package level: pinning package good / absent info (network-4). `badCertificateCallback` checks: Dart rules (F20) |
 | F12 | Platform-channel enumeration | ⬜ | | |
-| F13 | WebView plugin checks | ⬜ | | |
-| F14 | Root/jailbreak/tamper detection presence | ⬜ | | |
+| F13 | WebView plugin checks | 🟡 | 2026-10-26 | Package level: WebView plugin → info (cwe-749, platform-7). JS mode / channels: Dart rules (F20) |
+| F14 | Root/jailbreak/tamper detection presence | ✅ | 2026-10-26 | Package level: detection package good / absent info (resilience-1). Package names verified on pub.dev |
 | F15 | Deep links vs manifest/plist | ⬜ | | |
 | F16 | Sensitive logging | ⬜ | | |
 | F17 | MASVS v2 + CWE mapping | ⬜ | | |
@@ -158,3 +158,4 @@ date and notes as work lands. Last updated: 2026-10-25
 | 2026-10-25 | Dart version table (619e42cd, af6867f0), F9 asset audit + secret scan (14430672, 6a6e6b1a), F6 Dart strings fix in `elf.py` (a5991e7b). 54 Flutter tests |
 | 2026-10-26 | MobSF#2730 merged upstream (first merged contribution): F6 ✅, U2 ✅. Branch `fix/elf-dart-strings` deleted |
 | 2026-10-26 | F3 completed (engine version Android + iOS, Dart advisories), F4 obfuscation/split-debug-info. Phase 1 analysis logic done (F1–F6, F9); report wiring (F26/F27) waits on MobSF#2722. Next: post #2722 follow-up (2026-10-27) |
+| 2026-10-26 | Plugin inventory from native code (1222a62d) and package-based checks F10/F11/F13/F14 (5199cb48); identical findings on Android, obfuscated Android and iOS builds. 103 Flutter tests |
