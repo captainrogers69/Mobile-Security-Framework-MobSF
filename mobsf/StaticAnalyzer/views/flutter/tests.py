@@ -2106,3 +2106,43 @@ class CLIStdoutTests(SimpleTestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
         self.assertNotIn('REST API Key', proc.stdout)
         self.assertTrue(json.loads(proc.stdout)['is_flutter'])
+
+
+class MobSFOutputSkipTests(SimpleTestCase):
+    """MobSF writes apktool and decompiler output into the scan folder."""
+
+    def setUp(self):
+        self.home = tempfile.TemporaryDirectory()
+        self.patch = mock.patch(
+            'mobsf.MobSF.utils.scan_state_root',
+            return_value=Path(self.home.name) / 'scan_state')
+        self.patch.start()
+        self.status = mock.patch(
+            'mobsf.StaticAnalyzer.views.flutter.integration.'
+            'append_scan_status')
+        self.status.start()
+
+    def tearDown(self):
+        self.status.stop()
+        self.patch.stop()
+        self.home.cleanup()
+
+    def test_apktool_and_decompiler_output_skipped(self):
+        files = dict(ANDROID_APP)
+        # apktool's copy of the APK and leftovers of an earlier scan
+        for rel, data in ANDROID_APP.items():
+            files[f'apktool_out/{rel}'] = data
+        files['java_source/com/example/A.java'] = b'class A {}'
+        files['smali_source/com/example/A.smali'] = b'.class A'
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel, data in files.items():
+                path = Path(tmp) / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            res = scan_binary(TEST_MD5, tmp, 'android')
+        self.assertEqual(res['engine_files'], ['lib/arm64-v8a/libflutter.so'])
+        self.assertEqual(res['snapshots'], ['lib/arm64-v8a/libapp.so'])
+        self.assertEqual(res['assets'], [
+            {'file': 'assets/flutter_assets/.env', 'type': 'env'}])
+        self.assertEqual([s['file'] for s in res['asset_secrets']],
+                         ['assets/flutter_assets/.env'])
