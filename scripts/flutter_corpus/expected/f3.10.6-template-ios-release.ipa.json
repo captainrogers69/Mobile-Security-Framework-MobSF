@@ -1,0 +1,35 @@
+{
+ "is_flutter": true,
+ "platform": "ios",
+ "build_mode": "release",
+ "abis": [],
+ "flutter": [
+  "3.10.6"
+ ],
+ "dart": [
+  "3.0.3",
+  "3.0.4",
+  "3.0.5",
+  "3.0.6",
+  "3.0.7"
+ ],
+ "obfuscated": false,
+ "split_debug_info": false,
+ "packages": [
+  "collection",
+  "flutter",
+  "material_color_utilities",
+  "template",
+  "vector_math"
+ ],
+ "plugins": [],
+ "deep_linking": null,
+ "js_channels": false,
+ "assets": [],
+ "asset_secret_files": [],
+ "findings": [
+  "info:flutter_no_root_detection",
+  "info:flutter_no_ssl_pinning",
+  "info:flutter_not_obfuscated"
+ ]
+}

@@ -18,6 +18,7 @@ import requests
 
 from django.conf import settings
 from django.core.management import call_command
+from django.db.utils import OperationalError
 from django.test import SimpleTestCase, override_settings
 
 from mobsf.MobSF.utils import scan_state_file
@@ -1190,6 +1191,22 @@ class JSChannelTests(SimpleTestCase):
                 self._bin(tmp, b'\x00addJavaScriptChannelX\x00'
                                b'xaddJavaScriptChannel\x00setJavaScriptMode')))
 
+    def test_pigeon_channel_name_ignored(self):
+        # webview_flutter 2.x/3.x platform channel names are string
+        # literals, kept even in obfuscated apps that use no JS channel
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(uses_js_channels(self._bin(
+                tmp, b'\x00dev.flutter.pigeon.WebViewHostApi.'
+                     b'addJavaScriptChannel\x00')))
+
+    def test_webview_3x_unknown(self):
+        # webview_flutter 3.x always compiles in its own
+        # addJavaScriptChannel, so the name does not show app usage
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(uses_js_channels(self._bin(
+                tmp, b'\x00\x01addJavaScriptChannel\x00'
+                     b'\x00JavascriptChannelRegistry\x00')))
+
     def test_unreadable(self):
         self.assertIsNone(uses_js_channels('/nonexistent/libapp.so'))
 
@@ -2146,3 +2163,18 @@ class MobSFOutputSkipTests(SimpleTestCase):
             {'file': 'assets/flutter_assets/.env', 'type': 'env'}])
         self.assertEqual([s['file'] for s in res['asset_secrets']],
                          ['assets/flutter_assets/.env'])
+
+
+class CLIDatabaseTests(SimpleTestCase):
+
+    def test_cli_scan_quiet_without_scan_database(self):
+        # CLI scans have no scan record; an unmigrated database must not
+        # produce error logs from unzip()'s scan status updates
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = CLITests()._zip(tmp, ANDROID_APP, 'app.apk')
+            with mock.patch(
+                    'mobsf.MobSF.utils.RecentScansDB.objects.only',
+                    side_effect=OperationalError('no such table')), \
+                    self.assertNoLogs('mobsf.MobSF.utils', level='ERROR'):
+                res = scan_path(apk)
+        self.assertTrue(res['is_flutter'])
