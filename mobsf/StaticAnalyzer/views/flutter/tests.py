@@ -66,6 +66,10 @@ from mobsf.StaticAnalyzer.views.flutter.engine import (
     flutter_from_framework_plist,
     load_flutter_engines,
 )
+from mobsf.StaticAnalyzer.views.flutter.ios_shell import (
+    ios_shell_analysis,
+    ios_shell_findings,
+)
 from mobsf.StaticAnalyzer.views.flutter.integration import (
     load_result,
     save_result,
@@ -2409,15 +2413,156 @@ class ChannelTemplateTests(SimpleTestCase):
                    'findings': [], 'platform_channels': [
                        {'name': 'evil/<script>x</script>', 'kind': 'app',
                         'package': None, 'count': 1,
-                        'files': ['lib/<b>.dart']},
+                        'files': ['lib/<b>.dart'],
+                        'native_files': ['ios/Runner/<i>.swift']},
                        {'name': 'dev.flutter.pigeon.webview_flutter_android.*',
                         'kind': 'pigeon', 'package': 'webview_flutter',
-                        'count': 65, 'files': []}]}
+                        'count': 65, 'files': [], 'native_files': []}],
+                   'ios_shell': None}
         for tpl in ('static_analysis/flutter/section.html',
                     'pdf/flutter/section.html'):
             html = render_to_string(tpl, {'flutter': flutter})
             self.assertIn('evil/&lt;script&gt;x&lt;/script&gt;', html)
             self.assertNotIn('<script>x', html)
             self.assertIn('Pigeon (65 channels)', html)
-        self.assertIn('lib/&lt;b&gt;.dart', render_to_string(
-            'static_analysis/flutter/section.html', {'flutter': flutter}))
+        web = render_to_string(
+            'static_analysis/flutter/section.html', {'flutter': flutter})
+        self.assertIn('lib/&lt;b&gt;.dart', web)
+        self.assertIn('ios/Runner/&lt;i&gt;.swift', web)
+
+    def test_ios_shell_rendered_escaped(self):
+        flutter = {
+            'is_flutter': True, 'project_root': '.', 'packages': [],
+            'deep_linking': {'android': False, 'ios': False},
+            'osv': None, 'code_analysis': {}, 'assets': [],
+            'asset_secrets': [], 'findings': [], 'platform_channels': [],
+            'ios_shell': {
+                'code_analysis': {'ios_file_no_special': {
+                    'files': {'Runner/<a>.swift': '1'},
+                    'metadata': {'description': 'No protection <x>',
+                                 'severity': 'high',
+                                 'cwe': 'CWE-311: Missing',
+                                 'masvs': 'MSTG-STORAGE-1'}}},
+                'permissions': {'NSCameraUsageDescription': {
+                    'info': 'Camera', 'status': 'dangerous',
+                    'description': '<img src=x>'}},
+                'ats_findings': [{'issue': 'Arbitrary loads <y>',
+                                  'severity': 'high',
+                                  'description': 'Allowed'}],
+                'url_schemes': ['demo<app>'],
+            }}
+        web = render_to_string(
+            'static_analysis/flutter/section.html', {'flutter': flutter})
+        self.assertIn('IOS APP (ios/)', web)
+        for text in ('Runner/&lt;a&gt;.swift', 'No protection &lt;x&gt;',
+                     '&lt;img src=x&gt;', 'Arbitrary loads &lt;y&gt;',
+                     'demo&lt;app&gt;', 'NSCameraUsageDescription'):
+            self.assertIn(text, web)
+        self.assertNotIn('<img src=x>', web)
+        pdf = render_to_string(
+            'pdf/flutter/section.html', {'flutter': flutter})
+        self.assertIn('iOS app (ios/)', pdf)
+        self.assertIn('Arbitrary loads &lt;y&gt;', pdf)
+        self.assertIn('No protection &lt;x&gt;', pdf)
+
+
+IOS_PLIST = plistlib.dumps({
+    'CFBundleName': 'demo',
+    'NSAppTransportSecurity': {'NSAllowsArbitraryLoads': True},
+    'NSCameraUsageDescription': 'Scan codes',
+    'CFBundleURLTypes': [{'CFBundleURLSchemes': ['demoapp']}],
+})
+UNPROTECTED = b'try data.write(to: url, options: .noFileProtection)\n'
+PLUGIN_PLIST = plistlib.dumps({'NSMicrophoneUsageDescription': 'x'})
+
+
+class IOSShellTests(SimpleTestCase):
+
+    def _tree(self, tmp, files):
+        for rel, data in files.items():
+            path = Path(tmp) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+
+    def _project(self, tmp):
+        self._tree(tmp, {
+            'ios/Runner/Info.plist': IOS_PLIST,
+            'ios/Runner/AppDelegate.swift': UNPROTECTED,
+            # Not the app developer's code
+            'ios/Pods/Lib/Lib.swift': UNPROTECTED,
+            'ios/.symlinks/plugins/p/ios/Classes/P.swift': UNPROTECTED,
+            'ios/.symlinks/plugins/p/ios/Info.plist': PLUGIN_PLIST,
+            'ios/Flutter/Generated.swift': UNPROTECTED,
+        })
+
+    def test_shell_analysis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._project(tmp)
+            res = ios_shell_analysis(None, tmp)
+        rule = res['code_analysis']['ios_file_no_special']
+        self.assertEqual(list(rule['files']), ['Runner/AppDelegate.swift'])
+        self.assertEqual(rule['metadata']['severity'], 'high')
+        self.assertEqual(list(res['permissions']),
+                         ['NSCameraUsageDescription'])
+        self.assertIn('high', [a['severity'] for a in res['ats_findings']])
+        self.assertEqual(res['url_schemes'], ['demoapp'])
+
+    def test_raised_findings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._project(tmp)
+            found = ios_shell_findings(ios_shell_analysis(None, tmp))
+        ids = {f['id']: f for f in found}
+        unprotected = ids['flutter_ios_ios_file_no_special']
+        self.assertEqual(unprotected['severity'], 'high')
+        self.assertTrue(unprotected['title'].startswith('iOS app: '))
+        self.assertEqual(unprotected['cwe'], 'cwe-311')
+        self.assertEqual(unprotected['masvs'], 'storage-1')
+        ats = [f for f in found if f['id'].startswith('flutter_ios_ats_')]
+        self.assertTrue(ats)
+        self.assertTrue(all(f['severity'] in ('high', 'warning')
+                            for f in found))
+        self.assertEqual(ios_shell_findings(None), [])
+
+    def test_no_ios_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(ios_shell_analysis(None, tmp))
+
+    def test_ios_dir_symlink_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                tempfile.TemporaryDirectory() as outside:
+            self._project(outside)
+            (Path(tmp) / 'ios').symlink_to(Path(outside) / 'ios')
+            self.assertIsNone(ios_shell_analysis(None, tmp))
+
+    def test_source_analysis_includes_ios(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {k: v.encode() for k, v in PROJECT_FILES.items()})
+            self._project(tmp)
+            res = flutter_source_analysis(tmp)
+        self.assertIn('ios_file_no_special',
+                      res['ios_shell']['code_analysis'])
+        ids = [f['id'] for f in res['findings']]
+        self.assertIn('flutter_ios_ios_file_no_special', ids)
+        order = ['high', 'warning', 'info', 'good']
+        sev = [order.index(f['severity']) for f in res['findings']]
+        self.assertEqual(sev, sorted(sev))
+
+    def test_channel_native_files(self):
+        name = b'samples.flutter.dev/battery'
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {
+                'lib/main.dart': b"MethodChannel('" + name + b"')",
+                'android/app/src/main/kotlin/com/example/demo/'
+                'MainActivity.kt': b'private val channel = "' + name + b'"',
+                'ios/Runner/AppDelegate.swift':
+                    b'FlutterMethodChannel(name: "' + name + b'",',
+                # Plugin and build copies are not the app's handler
+                'ios/.symlinks/plugins/p/ios/P.swift': b'"' + name + b'"',
+                'android/app/build/tmp/X.java': b'"' + name + b'"',
+                # Longer name is a different channel
+                'ios/Runner/Other.swift': b'"' + name + b'2"',
+            })
+            res = source_channels(tmp)
+        self.assertEqual(res[0]['native_files'], [
+            'android/app/src/main/kotlin/com/example/demo/MainActivity.kt',
+            'ios/Runner/AppDelegate.swift'])

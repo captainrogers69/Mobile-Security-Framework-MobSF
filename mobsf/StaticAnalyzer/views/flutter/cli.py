@@ -66,7 +66,9 @@ def _android_manifest(app_dir):
 
 def _scan_dir(app_dir, osv):
     if is_flutter_source(app_dir):
-        return flutter_source_analysis(app_dir, osv_enabled=osv)
+        # The iOS Info.plist analysis reports scan status
+        with _no_scan_status_logs():
+            return flutter_source_analysis(app_dir, osv_enabled=osv)
     files = _rel_files(app_dir)
     if any(f.startswith('Payload/') and '.app/' in f for f in files):
         return flutter_binary_analysis(

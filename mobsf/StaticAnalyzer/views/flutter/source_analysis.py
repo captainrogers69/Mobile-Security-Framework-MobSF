@@ -31,6 +31,10 @@ from mobsf.StaticAnalyzer.views.flutter.fileio import (
     open_regular,
     safe_join,
 )
+from mobsf.StaticAnalyzer.views.flutter.ios_shell import (
+    ios_shell_analysis,
+    ios_shell_findings,
+)
 from mobsf.StaticAnalyzer.views.flutter.osv import osv_vulnerabilities
 from mobsf.StaticAnalyzer.views.flutter.plugins import app_packages
 from mobsf.StaticAnalyzer.views.flutter.source import (
@@ -132,7 +136,8 @@ def _osv_findings(osv):
     return findings
 
 
-def flutter_source_analysis(app_dir, osv_enabled=False, osv_session=None):
+def flutter_source_analysis(app_dir, osv_enabled=False, osv_session=None,
+                            checksum=None):
     """Analyse a Flutter project.
 
     osv_enabled sends locked hosted package names and versions to
@@ -147,10 +152,12 @@ def flutter_source_analysis(app_dir, osv_enabled=False, osv_session=None):
            if osv_enabled else None)
     deep_linking = _deep_linking(root)
     assets = classify_assets(_declared_assets(root))
+    ios_shell = ios_shell_analysis(checksum, root)
     findings = (flutter_checks(app_packages(p['name'] for p in packages))
                 + flutter_binary_checks(
                     deep_linking=any(deep_linking.values()))
-                + _osv_findings(osv))
+                + _osv_findings(osv)
+                + ios_shell_findings(ios_shell))
     return {
         'is_flutter': True,
         'project_root': root.relative_to(app_dir).as_posix(),
@@ -161,6 +168,7 @@ def flutter_source_analysis(app_dir, osv_enabled=False, osv_session=None):
         'assets': assets,
         'asset_secrets': asset_secrets(root, assets),
         'code_analysis': dart_code_analysis(root),
+        'ios_shell': ios_shell,
         'findings': sorted(
             findings,
             key=lambda f: (SEVERITY_ORDER[f['severity']], f['id'])),

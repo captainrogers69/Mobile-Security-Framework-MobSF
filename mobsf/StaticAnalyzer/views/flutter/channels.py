@@ -16,13 +16,16 @@ Mach-O: C strings). Dart snapshot strings are not terminated, so there a
 name is only required to start at a boundary.
 
 For Flutter project ZIPs, names passed to MethodChannel, EventChannel and
-BasicMessageChannel in the Dart sources are listed as app channels.
+BasicMessageChannel in the Dart sources are listed as app channels, with
+the native files in android/ and ios/ that use the same name (the
+handlers worth reviewing).
 """
 import logging
 import os
 import re
 from pathlib import Path, PurePosixPath
 
+from mobsf.MobSF.security import is_pipe_or_link
 from mobsf.StaticAnalyzer.views.flutter.dart_analysis import IGNORED_DIRS
 from mobsf.StaticAnalyzer.views.flutter.fileio import (
     open_regular,
@@ -56,11 +59,17 @@ MAX_CANDIDATES = 500
 MAX_NATIVE_FILES = 200
 MAX_DART_FILES = 5000
 MAX_DART_SIZE = 1024 * 1024
+NATIVE_DIRS = ('android', 'ios')
+NATIVE_EXTS = ('.kt', '.java', '.swift', '.m', '.mm')
+# Build output, dependencies and plugin sources: not the app's handlers
+NATIVE_SKIP = {'build', '.gradle', '.cxx', 'Pods', '.symlinks', 'Flutter',
+               '.dart_tool'}
 
 
-def _row(name, kind, package=None, count=1, files=None):
+def _row(name, kind, package=None, count=1, files=None, native_files=None):
     return {'name': name, 'kind': kind, 'package': package,
-            'count': count, 'files': sorted(files or [])}
+            'count': count, 'files': sorted(files or []),
+            'native_files': sorted(native_files or [])}
 
 
 def _package_keys(packages):
@@ -168,37 +177,61 @@ def binary_channels(app_dir, rel_paths, snapshot, packages):
     return sorted(rows, key=lambda r: (r['kind'], r['name']))
 
 
+def _read_text(path):
+    try:
+        fobj = open_regular(path, MAX_DART_SIZE)
+        if fobj is None:
+            return None
+        with fobj:
+            return fobj.read(MAX_DART_SIZE + 1).decode('utf-8', 'ignore')
+    except OSError:
+        return None
+
+
+def _walk(root, start, skip, exts):
+    """Yield (rel path, text) of files under start, up to MAX_DART_FILES."""
+    seen = 0
+    for dirpath, dirnames, filenames in os.walk(start):
+        rel_dir = Path(dirpath).relative_to(root).as_posix()
+        prefix = '' if rel_dir == '.' else rel_dir + '/'
+        dirnames[:] = sorted(d for d in dirnames if not skip(prefix, d))
+        for fname in sorted(filenames):
+            if not fname.endswith(exts):
+                continue
+            seen += 1
+            if seen > MAX_DART_FILES:
+                return
+            text = _read_text(Path(dirpath) / fname)
+            if text is not None:
+                yield prefix + fname, text
+
+
+def _native_handlers(root, names):
+    """Native files in android/ and ios/ that quote a channel name."""
+    found = {}
+    if not names:
+        return found
+    quoted = {name: f'"{name}"' for name in names}
+    for top in NATIVE_DIRS:
+        start = root / top
+        if is_pipe_or_link(start) or not start.is_dir():
+            continue
+        for rel, text in _walk(root, start,
+                               lambda _p, d: d in NATIVE_SKIP, NATIVE_EXTS):
+            for name, needle in quoted.items():
+                if needle in text:
+                    found.setdefault(name, set()).add(rel)
+    return found
+
+
 def source_channels(root):
     """App platform channels named in a Flutter project's Dart sources."""
     root = Path(root)
     found = {}
-    seen = 0
-    for dirpath, dirnames, filenames in os.walk(root):
-        rel_dir = Path(dirpath).relative_to(root).as_posix()
-        prefix = '' if rel_dir == '.' else rel_dir + '/'
-        dirnames[:] = sorted(
-            d for d in dirnames if f'{prefix}{d}/' not in IGNORED_DIRS)
-        for fname in sorted(filenames):
-            if not fname.endswith('.dart'):
-                continue
-            seen += 1
-            if seen > MAX_DART_FILES:
-                return _source_rows(found)
-            path = Path(dirpath) / fname
-            try:
-                fobj = open_regular(path, MAX_DART_SIZE)
-                if fobj is None:
-                    continue
-                with fobj:
-                    text = fobj.read(MAX_DART_SIZE + 1).decode(
-                        'utf-8', 'ignore')
-            except OSError:
-                continue
-            for match in SOURCE_RE.finditer(text):
-                found.setdefault(match.group(2), set()).add(prefix + fname)
-    return _source_rows(found)
-
-
-def _source_rows(found):
-    return [_row(name, 'app', files=files)
+    for rel, text in _walk(
+            root, root, lambda p, d: f'{p}{d}/' in IGNORED_DIRS, ('.dart',)):
+        for match in SOURCE_RE.finditer(text):
+            found.setdefault(match.group(2), set()).add(rel)
+    native = _native_handlers(root, list(found))
+    return [_row(name, 'app', files=files, native_files=native.get(name))
             for name, files in sorted(found.items())]

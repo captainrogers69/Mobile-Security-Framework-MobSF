@@ -1,7 +1,7 @@
 # Flutter Security Framework — Progress
 
 Tracks every item in [`requirements.md`](requirements.md). Update the status,
-date and notes as work lands. Last updated: 2026-10-25
+date and notes as work lands. Last updated: 2026-10-26
 
 **Legend:** ✅ done · 🟡 in progress · ⬜ not started · ⛔ blocked · ❓ needs decision
 
@@ -12,15 +12,15 @@ date and notes as work lands. Last updated: 2026-10-25
 | Planning | 2 | 2 | ✅ |
 | Decisions | 6 | 6 | ✅ |
 | Phase 0 — Git setup | 8 | 8 | ✅ |
-| Phase 0 — Services & credentials | 1 | 3 | 🟡 |
+| Phase 0 — Services & credentials | 2 | 3 | 🟡 |
 | Upstream contribution | 3 | 6 | 🟡 |
 | Phase 1 — Detection & strings | 9 | 9 | ✅ |
-| Phase 2 — Snapshot, checks, CLI | 5 | 11 | 🟡 |
-| Phase 3 — Source ZIP | 2 | 4 | 🟡 |
+| Phase 2 — Snapshot, checks, CLI | 8 | 11 | 🟡 |
+| Phase 3 — Source ZIP | 4 | 4 | ✅ |
 | Phase 4 — Dynamic (Android) | 0 | 4 | ⬜ |
 | Phase 5 — Diff, iOS, hardening | 0 | 1 | ⬜ |
 | False-positive reduction | 0 | 6 | 🟡 |
-| Non-functional | 0 | 6 | 🟡 |
+| Non-functional | 5 | 6 | 🟡 |
 
 ---
 
@@ -124,7 +124,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | F18 | Accept Flutter project ZIP | ✅ | 2026-10-26 | Fixed MobSF bug: Flutter ZIPs could not be scanned (root: `.gitignore` collision on move; wrapped: rejected). `move_flutter_android()` + `scan_source()` before the source check. Upstream PR candidate |
 | F19 | `pubspec.lock` OSV audit | ✅ | 2026-10-26 | Wired behind `MOBSF_FLUTTER_OSV_ENABLED` (default `0`, opt-in: sends dependency names to osv.dev) |
 | F20 | Dart SAST rules | ✅ | 2026-10-26 | `rules/dart_rules.yaml`, 13 rules via MobSF `SastEngine`; positive+negative fixtures; Flutter framework lib (694 files): no high false positives |
-| F21 | Native shell via existing MobSF rules | 🟡 | 2026-10-26 | Works today through MobSF's relaxed Android source check on `android/`; iOS shell not analysed for Flutter ZIPs |
+| F21 | Native shell via existing MobSF rules | ✅ | 2026-10-26 | `android/`: MobSF's Android source analysis (relaxed check). `ios/`: `flutter/ios_shell.py` runs MobSF's Swift/Objective-C rules on the app's own code (Pods, `.symlinks`, `Flutter/`, generated registrant skipped) and the Info.plist analysis of `ios/Runner` (permissions, ATS, URL schemes); high/warning raised as Flutter findings `flutter_ios_*`. Domain malware check not repeated. Project channels link to their native handler files in `android/` and `ios/`. Workaround for a full iOS report: ZIP only `ios/` |
 
 ## Phase 4 — Dynamic analysis (Android)
 
@@ -145,10 +145,10 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| N1 | Sandboxed external parsers, list args, timeouts | ⬜ | | |
-| N2 | Parser build cache + graceful failure | ⬜ | | |
-| N3 | ≤ 2 min added per 50 MB APK | ⬜ | | |
-| N4 | Tools baked into Docker image | ⬜ | | |
+| N1 | Sandboxed external parsers, list args, timeouts | ✅ | 2026-10-26 | Not applicable: no external parser is used (blutter/F7 dropped after MobSF#2722). All parsing is in Python with size limits |
+| N2 | Parser build cache + graceful failure | ✅ | 2026-10-26 | Not applicable: no external parser to build. Flutter analysis failures are logged and never fail the MobSF scan (`integration.py`) |
+| N3 | ≤ 2 min added per 50 MB APK | ✅ | 2026-10-26 | Measured on an M2 (Flutter analysis only, app already extracted): 45 MB release APK 0.5 s, 146 MB debug APK 0.8 s, 6 MB IPA 0.2 s |
+| N4 | Tools baked into Docker image | ✅ | 2026-10-26 | Not applicable: no new tools; only Python code and JSON tables shipped in the package |
 | N5 | Test corpus ≥ 10 Flutter apps in CI | 🟡 | 2026-10-26 | 32 apps: 8 builds of 3 ordinary apps (template, plugins, http; Android release/debug/obfuscated, iOS release) with Flutter 3.44.9, 3.27.4, 3.10.6, 3.0.5 (Dart 3.12 to 2.17). `scripts/flutter_corpus/build.sh`, `fetch_sdk.sh`, `scripts/flutter_corpus_check.py` with expected results; 32/32 match. Found and fixed a false positive: JS channel reported for every webview_flutter 3.x app. To do: run in CI once Actions is back |
 | N6 | `tox -e lint` clean + unit tests | ✅ | 2026-10-26 | Lint clean on every PR; 173 Flutter unit tests. Locally 2 integration tests need missing tools (wkhtmltopdf, x86 class-dump), same on upstream master |
 
@@ -183,3 +183,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | N5: corpus with 4 Flutter versions (32 apps). JS channel check no longer flags every webview_flutter 2.x/3.x app |
 | 2026-10-26 | Exact Dart version from the Flutter version (also for debug builds); desktop-only packages left out of APK/IPA inventory. Corpus 32/32 |
 | 2026-10-26 | F12 platform channels (list). Corpus app `channel_demo` (3.44.9), 35/35 |
+| 2026-10-26 | F21: iOS app of Flutter project ZIPs (MobSF iOS rules + Info.plist), channel ↔ native handler files. N1, N2, N4 not applicable; N3 measured |
