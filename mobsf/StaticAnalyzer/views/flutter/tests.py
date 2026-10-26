@@ -22,8 +22,10 @@ from mobsf.StaticAnalyzer.views.flutter.assets import (
     asset_secrets,
     audit_assets,
 )
+from mobsf.StaticAnalyzer.views.flutter.binary import flutter_binary_analysis
 from mobsf.StaticAnalyzer.views.flutter.checks import (
     flutter_binary_checks,
+    flutter_build_checks,
     flutter_checks,
     load_check_packages,
 )
@@ -54,6 +56,7 @@ from mobsf.StaticAnalyzer.views.flutter.obfuscation import (
 )
 from mobsf.StaticAnalyzer.views.flutter.osv import osv_vulnerabilities
 from mobsf.StaticAnalyzer.views.flutter.plugins import (
+    app_packages,
     base_package,
     flutter_plugins,
 )
@@ -1473,3 +1476,161 @@ class DartRulesTests(SimpleTestCase):
             self.assertRegex(rule['metadata']['masvs'], r'^[a-z]+-\d+$')
             if rule['metadata']['cwe']:
                 self.assertRegex(rule['metadata']['cwe'], r'^cwe-\d+$')
+
+
+class BuildChecksTests(SimpleTestCase):
+
+    def _sev(self, res):
+        return {f['id']: f['severity'] for f in res}
+
+    def test_debug_build(self):
+        res = {f['id']: f for f in flutter_build_checks('debug', None, [])}
+        self.assertEqual(res['flutter_debug_build']['severity'], 'high')
+        self.assertEqual(res['flutter_debug_build']['cwe'], 'cwe-489')
+        self.assertEqual(res['flutter_debug_build']['masvs'], 'code-2')
+
+    def test_profile_build(self):
+        self.assertEqual(self._sev(flutter_build_checks('profile', None, [])),
+                         {'flutter_profile_build': 'warning'})
+
+    def test_obfuscation(self):
+        self.assertEqual(self._sev(flutter_build_checks('release', False, [])),
+                         {'flutter_not_obfuscated': 'info'})
+        self.assertEqual(self._sev(flutter_build_checks('release', True, [])),
+                         {'flutter_obfuscated': 'good'})
+        self.assertEqual(flutter_build_checks('release', None, []), [])
+
+    def test_advisories(self):
+        advisories = check_advisories('android', flutter=['3.44.9'])
+        res = flutter_build_checks('release', None, advisories)
+        self.assertEqual(self._sev(res),
+                         {'flutter_advisory_GHSA-frr6-h895-5pxp': 'high'})
+        self.assertEqual(res[0]['masvs'], 'code-5')
+        self.assertEqual(res[0]['cwe'], 'cwe-295')
+
+    def test_possibly_affected_is_one_level_lower(self):
+        dart = ['3.13.%d' % i for i in range(8)]
+        advisories = check_advisories('android', dart=dart)
+        res = flutter_build_checks('release', None, advisories)
+        self.assertEqual(self._sev(res),
+                         {'flutter_advisory_GHSA-frr6-h895-5pxp': 'warning'})
+
+
+def _libapp(features=b'product no-dwarf_stack_traces_mode arm64 android'):
+    uris = b''.join(b'\x00' + u.encode() for u in _uris(40, ('flutter',
+                                                             'webview_flutter')))
+    return (_snapshot(snap_hash=SDK_3_12_HASH.encode(), features=features)
+            + uris + b'\x00addJavaScriptChannel\x00')
+
+
+ANDROID_APP = {
+    'AndroidManifest.xml': b'<binary manifest>',
+    'classes.dex': REG % (b'shared_preferences_android',
+                          b'io.flutter.plugins.sharedpreferences.'
+                          b'SharedPreferencesPlugin') + b'\x00',
+    'lib/arm64-v8a/libflutter.so': ENGINE_3_44_9.encode() + b'\x00',
+    'lib/arm64-v8a/libapp.so': _libapp(),
+    'assets/flutter_assets/.env': b'API_KEY=abc123\n',
+}
+
+
+class BinaryAnalysisTests(SimpleTestCase):
+
+    def _app(self, tmp, files):
+        for rel, data in files.items():
+            path = Path(tmp) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        return list(files)
+
+    def test_android_app(self):
+        manifest = parseString(MANIFEST.format(
+            meta=DEEPLINK_META.format(value='true')))
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, ANDROID_APP)
+            res = flutter_binary_analysis(
+                tmp, rels, 'android', parsed_manifest=manifest)
+        self.assertTrue(res['is_flutter'])
+        self.assertEqual(res['build_mode'], 'release')
+        self.assertEqual(res['abis'], ['arm64-v8a'])
+        self.assertEqual(res['snapshot_hash'], SDK_3_12_HASH)
+        self.assertEqual(res['dart'], ['3.12.1', '3.12.2'])
+        self.assertEqual(res['flutter'], ['3.44.9'])
+        self.assertEqual(res['engine'], ENGINE_3_44_9)
+        self.assertFalse(res['obfuscated'])
+        self.assertFalse(res['split_debug_info'])
+        self.assertEqual(res['packages'],
+                         ['flutter', 'shared_preferences', 'webview_flutter'])
+        self.assertEqual([p['name'] for p in res['plugins']],
+                         ['shared_preferences_android'])
+        self.assertEqual(res['assets'], [
+            {'file': 'assets/flutter_assets/.env', 'type': 'env'}])
+        self.assertEqual(res['asset_secrets'][0]['secrets'],
+                         ['"API_KEY" : "abc123"'])
+        self.assertEqual([a['id'] for a in res['advisories']],
+                         ['GHSA-frr6-h895-5pxp'])
+        ids = {f['id']: f['severity'] for f in res['findings']}
+        self.assertEqual(ids['flutter_advisory_GHSA-frr6-h895-5pxp'], 'high')
+        self.assertEqual(ids['flutter_insecure_storage'], 'warning')
+        self.assertEqual(ids['flutter_deep_linking'], 'info')
+        self.assertEqual(ids['flutter_js_channel'], 'info')
+        self.assertEqual(ids['flutter_webview'], 'info')
+        self.assertEqual(ids['flutter_not_obfuscated'], 'info')
+        order = ['high', 'warning', 'info', 'good']
+        sev = [order.index(f['severity']) for f in res['findings']]
+        self.assertEqual(sev, sorted(sev))
+
+    def test_ios_app_uses_plist_build_mode(self):
+        files = {
+            IOS_APP + 'Info.plist': plistlib.dumps(
+                {'CFBundleExecutable': 'Runner',
+                 'FlutterDeepLinkingEnabled': True}),
+            IOS_APP + 'Runner': _swift_class(
+                'webview_flutter_wkwebview', 'WebViewFlutterPlugin'),
+            IOS_FW + 'Flutter': b'\xcf\xfa\xed\xfe',
+            IOS_FW + 'Info.plist': _framework_plist(BuildMode='profile'),
+            IOS_APP + 'Frameworks/App.framework/App': _libapp(
+                b'product no-dwarf_stack_traces_mode arm64 ios'),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, files)
+            info = plistlib.loads(files[IOS_APP + 'Info.plist'])
+            res = flutter_binary_analysis(tmp, rels, 'ios', info_plist=info)
+        self.assertEqual(res['build_mode'], 'profile')
+        self.assertEqual(res['flutter'], ['3.44.9'])
+        # The TLS advisory is Android only
+        self.assertEqual(res['advisories'], [])
+        ids = {f['id'] for f in res['findings']}
+        self.assertIn('flutter_profile_build', ids)
+        self.assertIn('flutter_deep_linking', ids)
+        self.assertIn('webview_flutter', res['packages'])
+
+    def test_not_flutter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {'classes.dex': b'dex',
+                                   'lib/arm64-v8a/libfoo.so': b'x'})
+            self.assertEqual(flutter_binary_analysis(tmp, rels, 'android'),
+                             {'is_flutter': False})
+
+    def test_debug_build_without_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                'lib/x86_64/libflutter.so': ENGINE_3_44_9.encode() + b'\x00',
+                'assets/flutter_assets/kernel_blob.bin': b'kernel'})
+            res = flutter_binary_analysis(tmp, rels, 'android')
+        self.assertEqual(res['build_mode'], 'debug')
+        self.assertIsNone(res['snapshot_hash'])
+        self.assertEqual(res['flutter'], ['3.44.9'])
+        ids = {f['id']: f['severity'] for f in res['findings']}
+        self.assertEqual(ids['flutter_debug_build'], 'high')
+
+
+class AppPackagesTests(SimpleTestCase):
+
+    def test_normalized_inventory(self):
+        self.assertEqual(app_packages([
+            'shared_preferences', 'shared_preferences_android',
+            'shared_preferences_platform_interface',
+            'webview_flutter_wkwebview', 'plugin_platform_interface',
+            'flutter', 'http']),
+            ['flutter', 'http', 'shared_preferences', 'webview_flutter'])

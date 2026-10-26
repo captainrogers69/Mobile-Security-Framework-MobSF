@@ -2,8 +2,13 @@
 """Safe file opening for attacker-controlled app files."""
 import os
 import stat
+from pathlib import Path
 
-from mobsf.MobSF.security import is_pipe_or_link
+from mobsf.MobSF.security import (
+    is_path_traversal,
+    is_pipe_or_link,
+    is_safe_path,
+)
 
 
 def open_regular(path, max_size):
@@ -61,3 +66,16 @@ def scan_regex(path, regex, tail=512, max_size=SCAN_MAX_SIZE,
                 return matches
             buf = buf[-tail:]
             carried = True
+
+
+def safe_join(base_dir, rel):
+    """Join an untrusted relative path to base_dir, or None if unsafe."""
+    if not isinstance(rel, str) or not rel:
+        return None
+    rel = rel.replace('\\', '/')
+    if is_path_traversal(rel):
+        return None
+    full = Path(base_dir) / rel
+    if not is_safe_path(base_dir, full, rel):
+        return None
+    return full

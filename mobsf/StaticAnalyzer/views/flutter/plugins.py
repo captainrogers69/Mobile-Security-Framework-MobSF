@@ -10,14 +10,11 @@ CocoaPods builds ship each plugin as Frameworks/<pub package>.framework.
 import logging
 import plistlib
 import re
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 
-from mobsf.MobSF.security import (
-    is_path_traversal,
-    is_safe_path,
-)
 from mobsf.StaticAnalyzer.views.flutter.fileio import (
     open_regular,
+    safe_join,
     scan_regex,
 )
 
@@ -44,6 +41,12 @@ def base_package(name):
     return name
 
 
+def app_packages(names):
+    """App-facing package inventory: federated names mapped, internals dropped."""
+    return sorted({base_package(n) for n in names
+                   if not n.endswith('_platform_interface')})
+
+
 def _demangle_plugin(run):
     """Return (module, class) from '<n><module><m><class>', else None."""
     run = run.decode('ascii')
@@ -63,19 +66,9 @@ def _demangle_plugin(run):
     return module, cls
 
 
-def _safe_file(app_dir, rel):
-    rel = rel.replace('\\', '/')
-    if is_path_traversal(rel):
-        return None
-    full = Path(app_dir) / rel
-    if not is_safe_path(app_dir, full, rel):
-        return None
-    return full
-
-
 def _ios_executable(app_dir, app_rel):
     """Return the main executable path of a .app bundle, else None."""
-    plist = _safe_file(app_dir, f'{app_rel}/Info.plist')
+    plist = safe_join(app_dir, f'{app_rel}/Info.plist')
     if plist is None:
         return None
     try:
@@ -90,7 +83,7 @@ def _ios_executable(app_dir, app_rel):
     if (not isinstance(exe, str) or not EXE_RE.match(exe)
             or exe.strip('.') == '' or '..' in exe):
         return None
-    return _safe_file(app_dir, f'{app_rel}/{exe}')
+    return safe_join(app_dir, f'{app_rel}/{exe}')
 
 
 def _add(found, platform, name, cls):
@@ -112,7 +105,7 @@ def flutter_plugins(app_dir, rel_paths):
             continue
         try:
             if DEX_RE.match(parts[-1]):
-                full = _safe_file(app_dir, rel)
+                full = safe_join(app_dir, rel)
                 for match in (scan_regex(full, REGISTRANT_RE) or [] if full else []):
                     _add(found, 'android', match.group(1).decode(),
                          match.group(2).decode())
