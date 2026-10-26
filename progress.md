@@ -19,7 +19,7 @@ date and notes as work lands. Last updated: 2026-10-25
 | Phase 3 — Source ZIP | 2 | 4 | 🟡 |
 | Phase 4 — Dynamic (Android) | 0 | 4 | ⬜ |
 | Phase 5 — Diff, iOS, hardening | 0 | 1 | ⬜ |
-| False-positive reduction | 0 | 5 | ⬜ |
+| False-positive reduction | 0 | 6 | 🟡 |
 | Non-functional | 0 | 6 | ⬜ |
 
 ---
@@ -94,11 +94,12 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F30 | Skip `io/flutter/` in code analysis | ⬜ | | 15 of 76 code-analysis hits are Flutter embedding Java (e.g. logging in `FlutterJNI.java`). One-line `SKIP_CLASS_PATH` change; precedent MobSF#2733 |
-| F31 | No secrets/URLs from `libflutter.so` | ⬜ | | Seen during #2730 (7 noisy secrets, `w3.org`/`data:` URLs), not tracked until now |
-| F32 | Drop known Flutter identifiers from secrets | ⬜ | | Snapshot hash seen during F6; engine/component revisions, build-path ID new |
-| F33 | Ignore fixed plugin constants | ⬜ | | 4 base64 constants from `flutter_secure_storage` |
+| F30 | Skip `io/flutter/` in code analysis | 🟡 | 2026-10-26 | Upstream PR MobSF#2736 open (1 line in `SKIP_CLASS_PATH`). Flutter APK code hits 76 → 61, non-Flutter sample unchanged |
+| F31 | No secrets/URLs from `libflutter.so` | 🟡 | 2026-10-26 | Built: `get_binary_secrets()` reports only known-format secrets for the engine (`libflutter.so`, `Flutter.framework/Flutter`), Android + iOS paths. Branch `fix/flutter-engine-strings`, queued (`upstream-prs/queue/01`) until an open PR is reviewed. APK secrets 12 → 5, IPA 26 → 21, non-Flutter unchanged |
+| F32 | Drop known Flutter identifiers from secrets | 🟡 | 2026-10-26 | Snapshot hash skipped where it appears as the snapshot header (same branch as F31). Build-path IDs left out (test-environment artifact) |
+| F33 | Ignore fixed plugin constants | 🟡 | 2026-10-26 | In progress: 4 `flutter_secure_storage` base64 constants remain on the APK after F31/F32 |
 | F34 | Native libs analysed twice (`apktool_out/`) | ⬜ | | Affects every app (MobSF's own sample too); confirm cause first |
+| F35 | Swift private symbol hashes reported as secrets | ⬜ | 2026-10-26 | New: 20 of the 21 remaining IPA secrets (e.g. `C7EEC6A640D8…WebKitLibraryPigeon…`) from Swift private discriminators in the WebView plugin; affects any Swift app |
 
 ## Phase 2 — Dart snapshot analysis, Flutter checks, CLI
 
@@ -175,3 +176,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | Binary deep-link + JS channel checks (b9e6b32b); source ZIP pieces: project detection + pubspec.lock (1d3fe39f), OSV (99bfed64), Dart rules (69393baf); entry points `flutter_binary_analysis` (ea141720) and `flutter_source_analysis` (cd493508). 142 Flutter tests, full suite 177 (same 2 local integration failures) |
 | 2026-10-26 | Flutter analysis wired into the fork's MobSF (3a6c48f2, f403035e; PR #10): scans, web/PDF reports, JSON API; Flutter project ZIPs now scannable. E2E verified on isolated instance; full suite 190 tests (2 known local failures) |
 | 2026-10-26 | Maintainer replied on #2722 (small iterative PRs, no third-party binaries, fewer false positives). Measured false positives on a real Flutter APK; added F30–F34. #2722 follow-up posted with small-PR plan. Upstream PR #2734 (Flutter source ZIPs) open |
+| 2026-10-26 | F30 upstream PR #2736 opened; F31/F32 built and queued; F35 added. Upstream PR drafts and logs kept in local `upstream-prs/` (gitignored). Manual upstream sync PR #13 |
