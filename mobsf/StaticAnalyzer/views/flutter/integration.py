@@ -61,6 +61,29 @@ def load_result(checksum):
     return data if isinstance(data, dict) else None
 
 
+APPSEC_SEVERITY = {'high': 'high', 'warning': 'warning', 'info': 'info',
+                   'good': 'secure'}
+
+
+def appsec_findings(checksum):
+    """(severity, item) of the stored Flutter findings for the scorecard."""
+    if not isinstance(checksum, str) or not is_md5(checksum):
+        return []
+    result = load_result(checksum) or {}
+    found = []
+    for finding in result.get('findings') or []:
+        if not isinstance(finding, dict):
+            continue
+        severity = APPSEC_SEVERITY.get(finding.get('severity'))
+        if severity:
+            found.append((severity, {
+                'title': finding.get('title', ''),
+                'description': finding.get('description', ''),
+                'section': 'flutter',
+            }))
+    return found
+
+
 def _rel_files(app_dir):
     """Relative posix paths of files under app_dir (links not followed)."""
     files = []

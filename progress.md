@@ -184,3 +184,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | Exact Dart version from the Flutter version (also for debug builds); desktop-only packages left out of APK/IPA inventory. Corpus 32/32 |
 | 2026-10-26 | F12 platform channels (list). Corpus app `channel_demo` (3.44.9), 35/35 |
 | 2026-10-26 | F21: iOS app of Flutter project ZIPs (MobSF iOS rules + Info.plist), channel ↔ native handler files. N1, N2, N4 not applicable; N3 measured |
+| 2026-10-26 | Flutter findings count in MobSF's AppSec scorecard / security score (APK, IPA, ZIP) |

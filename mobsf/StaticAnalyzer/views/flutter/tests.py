@@ -23,6 +23,7 @@ from django.template.loader import render_to_string
 from django.test import SimpleTestCase, override_settings
 
 from mobsf.MobSF.utils import scan_state_file
+from mobsf.StaticAnalyzer.views.common.appsec import get_android_dashboard
 from mobsf.StaticAnalyzer.views.android.apk import valid_source_code
 from mobsf.StaticAnalyzer.views.common.binary.elf import ELFChecksec
 from mobsf.StaticAnalyzer.views.flutter.advisories import (
@@ -71,6 +72,7 @@ from mobsf.StaticAnalyzer.views.flutter.ios_shell import (
     ios_shell_findings,
 )
 from mobsf.StaticAnalyzer.views.flutter.integration import (
+    appsec_findings,
     load_result,
     save_result,
     scan_binary,
@@ -2566,3 +2568,61 @@ class IOSShellTests(SimpleTestCase):
         self.assertEqual(res[0]['native_files'], [
             'android/app/src/main/kotlin/com/example/demo/MainActivity.kt',
             'ios/Runner/AppDelegate.swift'])
+
+
+SCORE_RESULT = {'is_flutter': True, 'findings': [
+    {'id': 'flutter_debug_build', 'severity': 'high',
+     'title': 'Debug build', 'description': 'Ships kernel_blob.bin'},
+    {'id': 'flutter_ios_ats_x', 'severity': 'warning',
+     'title': 'iOS app: ATS exception', 'description': 'd'},
+    {'id': 'flutter_no_ssl_pinning', 'severity': 'info',
+     'title': 'No SSL pinning', 'description': 'd'},
+    {'id': 'flutter_obfuscated', 'severity': 'good',
+     'title': 'Obfuscated', 'description': 'd'},
+]}
+
+
+class AppSecScoreTests(SimpleTestCase):
+
+    def setUp(self):
+        self.home = tempfile.TemporaryDirectory()
+        self.patch = mock.patch(
+            'mobsf.MobSF.utils.scan_state_root',
+            return_value=Path(self.home.name) / 'scan_state')
+        self.patch.start()
+
+    def tearDown(self):
+        self.patch.stop()
+        self.home.cleanup()
+
+    def _android(self):
+        return {'md5': TEST_MD5, 'code_analysis': {'findings': {}},
+                'permissions': {}, 'domains': {}, 'firebase_urls': [],
+                'trackers': {}, 'secrets': [], 'certificate_analysis': {},
+                'network_security': {}, 'manifest_analysis': {}}
+
+    def test_appsec_findings(self):
+        save_result(TEST_MD5, SCORE_RESULT)
+        found = appsec_findings(TEST_MD5)
+        self.assertEqual([(s, f['title'], f['section']) for s, f in found], [
+            ('high', 'Debug build', 'flutter'),
+            ('warning', 'iOS app: ATS exception', 'flutter'),
+            ('info', 'No SSL pinning', 'flutter'),
+            ('secure', 'Obfuscated', 'flutter')])
+
+    def test_no_result_or_bad_hash(self):
+        self.assertEqual(appsec_findings(TEST_MD5), [])
+        self.assertEqual(appsec_findings('../etc'), [])
+        self.assertEqual(appsec_findings(None), [])
+
+    def test_score_counts_flutter(self):
+        before = get_android_dashboard(self._android(), True)
+        self.assertEqual(before['high'], [])
+        save_result(TEST_MD5, SCORE_RESULT)
+        after = get_android_dashboard(self._android(), True)
+        self.assertEqual([f['title'] for f in after['high']],
+                         ['Debug build'])
+        self.assertEqual([f['section'] for f in after['warning']],
+                         ['flutter'])
+        self.assertIn('Obfuscated', [f['title'] for f in after['secure']])
+        self.assertLess(after['security_score'], 100)

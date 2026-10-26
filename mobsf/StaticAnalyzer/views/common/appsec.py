@@ -19,6 +19,9 @@ from mobsf.StaticAnalyzer.models import (
 )
 from mobsf.StaticAnalyzer.views.android.db_interaction import (
     get_context_from_db_entry as adb)
+from mobsf.StaticAnalyzer.views.flutter.integration import (
+    appsec_findings as flutter_appsec_findings,
+)
 from mobsf.StaticAnalyzer.views.ios.db_interaction import (
     get_context_from_db_entry as idb)
 from mobsf.MobSF.views.authentication import (
@@ -186,6 +189,9 @@ def common_fields(findings, data):
                 f'{sec}'),
             'section': 'secrets',
         })
+    # Flutter analysis (APK, IPA, project ZIP)
+    for sev, item in flutter_appsec_findings(data['md5']):
+        findings[sev].append(item)
     high = len(findings.get('high'))
     warn = len(findings.get('warning'))
     sec = len(findings.get('secure'))

@@ -38,6 +38,8 @@ Plan and status: [`requirements.md`](../requirements.md), [`progress.md`](../pro
 
 - Web report: **Flutter** entry in the sidebar (Android binary/source, iOS binary reports)
 - PDF report: Flutter section
+- AppSec scorecard and security score (web, PDF, `/api/v1/scorecard`): Flutter findings
+  count as section **FLUTTER** (high, warning, info; "good" counts as secure)
 - REST API: `flutter` key in `/api/v1/scan` and `/api/v1/report_json`
 - Stored per scan in `~/.MobSF/scan_state/<md5>/flutter.json`; deleted with the scan
 
