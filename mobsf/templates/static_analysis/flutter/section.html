@@ -120,8 +120,13 @@
             </div>
             {% endif %}
 
-            {% if flutter.ios_shell %}
+            {% if flutter.ios_shell or flutter.ios_report %}
             <p><strong>IOS APP (ios/)</strong></p>
+            {% if flutter.ios_report %}
+            <p><a href="{% url 'static_analyzer_ios' checksum=md5 %}" class="btn btn-outline-primary btn-sm" role="button"><i class="fab fa-apple"></i> Full iOS report</a> (MobSF's iOS source report of <code>ios/</code>, with its own score; PDF and API: add <code>platform=ios</code>)</p>
+            {% endif %}
+            {% endif %}
+            {% if flutter.ios_shell %}
             <p>MobSF's iOS checks on the app's own iOS code and <code>ios/Runner/Info.plist</code> (CocoaPods, plugin sources and generated files skipped). High and warning items also appear in the findings above.</p>
             {% if flutter.ios_shell.ats_findings %}
             <div class="table-responsive">

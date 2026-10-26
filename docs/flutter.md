@@ -43,6 +43,11 @@ Plan and status: [`requirements.md`](../requirements.md), [`progress.md`](../pro
   section: MobSF's score is an average, so they would dilute real issues
 - REST API: `flutter` key in `/api/v1/scan` and `/api/v1/report_json`
 - Stored per scan in `~/.MobSF/scan_state/<md5>/flutter.json`; deleted with the scan
+- Flutter project ZIP with an Xcode project in `ios/`: also a full MobSF iOS source report
+  of `ios/` under the same scan hash ("Full iOS report" button in the Flutter section).
+  PDF, `/api/v1/report_json`, `/api/v1/download_pdf` and `/api/v1/scorecard` return it with
+  `platform=ios`; without it they return the Android report as before. The scan's
+  recent-scans entry keeps the Android details; deleting the scan removes both reports
 
 ## Settings
 
@@ -94,9 +99,9 @@ python scripts/update_flutter_dart_versions.py --all    # rebuild
   plugin registration, and checks based on Dart names (e.g. JS channels) can't run.
 - WebView JavaScript channels can't be detected in apps using `webview_flutter`
   2.x/3.x: the plugin always contains the method name, used or not.
-- A Flutter project ZIP gives one report (Android source). The iOS app is shown in its
-  Flutter section and does not count in MobSF's security score; for a full iOS report,
-  ZIP only `ios/` and upload it.
+- MobSF's Android source scan finds no app name, package or version in Flutter projects
+  (their `AndroidManifest.xml` has no `package` attribute); the recent-scans entry takes
+  them from the iOS report when there is one.
 - Platform channels: debug builds (no compiled Dart) get no list; Pigeon names of old
   plugins (no package in the name, before 2023) and app channels whose native side is
   outside the dex files / iOS main executable (e.g. in an SDK framework) are not listed.

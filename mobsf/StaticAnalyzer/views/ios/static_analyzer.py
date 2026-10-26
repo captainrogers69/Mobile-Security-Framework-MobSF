@@ -18,6 +18,7 @@ from mobsf.StaticAnalyzer.models import (
 from mobsf.StaticAnalyzer.views.common.a import (
     a_analysis,
 )
+from mobsf.StaticAnalyzer.views.flutter.integration import flutter_ios_dir
 from mobsf.StaticAnalyzer.views.ios.dylib import (
     dylib_analysis,
 )
@@ -86,6 +87,9 @@ def static_analyzer_ios(request, checksum, api=False):
         elif file_type == 'a':
             return a_analysis(request, app_dict, rescan, api)
         elif file_type in ('ios', 'zip'):
+            # Flutter project ZIP: the iOS report covers ios/ only
+            app_dict['app_dir'] = (flutter_ios_dir(app_dict['app_dir'])
+                                   or app_dict['app_dir'])
             return ios_analysis(request, app_dict, rescan, api)
         else:
             err = ('File Type not supported, '

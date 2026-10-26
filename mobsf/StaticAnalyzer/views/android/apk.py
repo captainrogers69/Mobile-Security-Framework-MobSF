@@ -80,6 +80,7 @@ from mobsf.StaticAnalyzer.views.flutter.integration import (
     scan_binary as flutter_scan_binary,
     scan_source as flutter_scan_source,
 )
+from mobsf.StaticAnalyzer.views.flutter.ios_report import scan_ios_report
 from mobsf.StaticAnalyzer.views.flutter.source import is_flutter_source
 from mobsf.StaticAnalyzer.views.common.async_task import (
     async_analysis,
@@ -365,6 +366,8 @@ def src_analysis_task(checksum, app_dic, rescan, pro_type, queue=False):
             trackers,
             rescan,
         )
+        # Flutter project with an Xcode project: also a full iOS report
+        scan_ios_report(checksum, app_dic, rescan)
         if queue:
             return mark_task_completed(
                 checksum, app_dic['subject'], 'Success')

@@ -10,8 +10,11 @@ from mobsf.MobSF.utils import (
     python_list,
 )
 from mobsf.MobSF.views.home import update_scan_timestamp
-from mobsf.StaticAnalyzer.models import StaticAnalyzerIOS
-from mobsf.StaticAnalyzer.models import RecentScansDB
+from mobsf.StaticAnalyzer.models import (
+    RecentScansDB,
+    StaticAnalyzerAndroid,
+    StaticAnalyzerIOS,
+)
 from mobsf.StaticAnalyzer.views.common.secret_detection import (
     sort_secrets,
 )
@@ -210,18 +213,37 @@ def save_or_update(update_type,
         msg = 'Failed to Save/Update Database'
         logger.exception(msg)
         append_scan_status(app_dict['md5_hash'], msg, repr(exp))
+    update_recent_scan(app_dict['md5_hash'], {
+        'APP_NAME': info_dict['bin_name'],
+        'PACKAGE_NAME': info_dict['id'],
+        'VERSION_NAME': info_dict['bundle_version_name'],
+    })
+
+
+def update_recent_scan(checksum, values):
+    """Set the app details of a recent scan.
+
+    A Flutter project ZIP has an Android and an iOS report under one scan
+    hash; the scan keeps the Android app's details and only fills the
+    empty ones (Flutter manifests have no package attribute), skipping
+    unresolved Xcode build variables such as $(FLUTTER_BUILD_NAME).
+    """
     try:
-        values = {
-            'APP_NAME': info_dict['bin_name'],
-            'PACKAGE_NAME': info_dict['id'],
-            'VERSION_NAME': info_dict['bundle_version_name'],
-        }
-        RecentScansDB.objects.filter(
-            MD5=app_dict['md5_hash']).update(**values)
+        if StaticAnalyzerAndroid.objects.filter(MD5=checksum).exists():
+            row = RecentScansDB.objects.filter(MD5=checksum).first()
+            if row is None:
+                return
+            values = {
+                field: value for field, value in values.items()
+                if not getattr(row, field) and isinstance(value, str)
+                and value and '$(' not in value}
+            if not values:
+                return
+        RecentScansDB.objects.filter(MD5=checksum).update(**values)
     except Exception as exp:
         msg = 'Updating RecentScansDB table failed'
         logger.exception(msg)
-        append_scan_status(app_dict['md5_hash'], msg, repr(exp))
+        append_scan_status(checksum, msg, repr(exp))
 
 
 def save_get_ctx(app_dict, code_dict, bin_dict, rescan):

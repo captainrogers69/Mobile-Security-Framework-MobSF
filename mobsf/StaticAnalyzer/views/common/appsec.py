@@ -21,6 +21,7 @@ from mobsf.StaticAnalyzer.views.android.db_interaction import (
     get_context_from_db_entry as adb)
 from mobsf.StaticAnalyzer.views.flutter.integration import (
     appsec_findings as flutter_appsec_findings,
+    requested_platform,
 )
 from mobsf.StaticAnalyzer.views.ios.db_interaction import (
     get_context_from_db_entry as idb)
@@ -382,7 +383,10 @@ def appsec_dashboard(request, checksum, api=False):
             MD5=checksum).first()
         ios_static_db = StaticAnalyzerIOS.objects.filter(
             MD5=checksum).first()
-        if android_static_db:
+        # A Flutter project ZIP has an Android and an iOS report
+        if requested_platform(request) == 'ios' and ios_static_db:
+            context = get_ios_dashboard([ios_static_db])
+        elif android_static_db:
             context = get_android_dashboard([android_static_db])
         elif ios_static_db:
             context = get_ios_dashboard([ios_static_db])

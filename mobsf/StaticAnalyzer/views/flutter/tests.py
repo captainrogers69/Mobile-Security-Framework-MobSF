@@ -20,9 +20,15 @@ from django.conf import settings
 from django.core.management import call_command
 from django.db.utils import OperationalError
 from django.template.loader import render_to_string
-from django.test import SimpleTestCase, override_settings
+from django.test import (
+    RequestFactory,
+    SimpleTestCase,
+    TestCase,
+    override_settings,
+)
 
 from mobsf.MobSF.utils import scan_state_file
+from mobsf.StaticAnalyzer.models import RecentScansDB, StaticAnalyzerAndroid
 from mobsf.StaticAnalyzer.views.common.appsec import get_android_dashboard
 from mobsf.StaticAnalyzer.views.android.apk import valid_source_code
 from mobsf.StaticAnalyzer.views.common.binary.elf import ELFChecksec
@@ -67,13 +73,19 @@ from mobsf.StaticAnalyzer.views.flutter.engine import (
     flutter_from_framework_plist,
     load_flutter_engines,
 )
+from mobsf.StaticAnalyzer.views.ios.db_interaction import (
+    update_recent_scan,
+)
+from mobsf.StaticAnalyzer.views.flutter.ios_report import scan_ios_report
 from mobsf.StaticAnalyzer.views.flutter.ios_shell import (
     ios_shell_analysis,
     ios_shell_findings,
 )
 from mobsf.StaticAnalyzer.views.flutter.integration import (
     appsec_findings,
+    flutter_ios_dir,
     load_result,
+    requested_platform,
     save_result,
     scan_binary,
     scan_source,
@@ -2642,3 +2654,179 @@ class AppSecScoreTests(SimpleTestCase):
              'description': 'd'} for i in range(5)]})
         after = get_android_dashboard(data, True)['security_score']
         self.assertLessEqual(after, before)
+
+
+class FlutterIOSReportTests(SimpleTestCase):
+
+    def setUp(self):
+        self.home = tempfile.TemporaryDirectory()
+        self.patch = mock.patch(
+            'mobsf.MobSF.utils.scan_state_root',
+            return_value=Path(self.home.name) / 'scan_state')
+        self.patch.start()
+        self.status = mock.patch(
+            'mobsf.StaticAnalyzer.views.flutter.integration.'
+            'append_scan_status')
+        self.status.start()
+        # No database here: whether an iOS report row exists
+        self.exists_patch = mock.patch(
+            'mobsf.StaticAnalyzer.views.flutter.ios_report.'
+            '_ios_report_exists', return_value=False)
+        self.exists = self.exists_patch.start()
+
+    def tearDown(self):
+        self.patch.stop()
+        self.status.stop()
+        self.exists_patch.stop()
+        self.home.cleanup()
+
+    def _project(self, root, xcode=True):
+        root = Path(root)
+        (root / 'lib').mkdir(parents=True)
+        (root / 'pubspec.yaml').write_text(PUBSPEC)
+        (root / 'lib' / 'main.dart').write_text('void main() {}')
+        (root / 'ios' / 'Runner').mkdir(parents=True)
+        if xcode:
+            (root / 'ios' / 'Runner.xcodeproj').mkdir()
+        return root
+
+    def test_ios_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._project(Path(tmp) / 'demo')
+            self.assertEqual(flutter_ios_dir(tmp),
+                             (Path(tmp) / 'demo' / 'ios').as_posix() + '/')
+        with tempfile.TemporaryDirectory() as tmp:
+            self._project(tmp, xcode=False)
+            self.assertIsNone(flutter_ios_dir(tmp))
+        with tempfile.TemporaryDirectory() as tmp:
+            # Plain iOS project ZIP: not a Flutter project
+            (Path(tmp) / 'App.xcodeproj').mkdir()
+            self.assertIsNone(flutter_ios_dir(tmp))
+
+    def test_ios_dir_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                tempfile.TemporaryDirectory() as outside:
+            root = Path(tmp)
+            (root / 'lib').mkdir()
+            (root / 'pubspec.yaml').write_text(PUBSPEC)
+            (root / 'lib' / 'main.dart').write_text('void main() {}')
+            (Path(outside) / 'Runner.xcodeproj').mkdir()
+            (root / 'ios').symlink_to(outside)
+            self.assertIsNone(flutter_ios_dir(tmp))
+
+    def _app_dic(self, tmp):
+        return {'md5': TEST_MD5, 'app_dir': Path(tmp),
+                'app_name': 'demo.zip', 'dir': Path(settings.BASE_DIR)}
+
+    def test_scan_ios_report(self):
+        save_result(TEST_MD5, {'is_flutter': True, 'findings': []})
+        # No report before the scan, one after
+        self.exists.side_effect = [False, True]
+        with tempfile.TemporaryDirectory() as tmp, mock.patch(
+                'mobsf.StaticAnalyzer.views.flutter.ios_report.'
+                'ios_analysis_task') as task:
+            self._project(tmp)
+            self.assertTrue(scan_ios_report(TEST_MD5, self._app_dic(tmp)))
+        checksum, app_dict, rescan = task.call_args.args
+        self.assertEqual(checksum, TEST_MD5)
+        self.assertEqual(app_dict['md5_hash'], TEST_MD5)
+        self.assertEqual(app_dict['file_name'], 'demo.zip')
+        self.assertEqual(app_dict['app_dir'],
+                         (Path(tmp) / 'ios').as_posix() + '/')
+        self.assertTrue(app_dict['app_path'].endswith(f'{TEST_MD5}.zip'))
+        self.assertFalse(rescan)
+        self.assertTrue(load_result(TEST_MD5)['ios_report'])
+
+    def test_scan_ios_report_updates_existing(self):
+        self.exists.return_value = True
+        with tempfile.TemporaryDirectory() as tmp, mock.patch(
+                'mobsf.StaticAnalyzer.views.flutter.ios_report.'
+                'ios_analysis_task') as task:
+            self._project(tmp)
+            scan_ios_report(TEST_MD5, self._app_dic(tmp))
+        self.assertTrue(task.call_args.args[2])
+
+    def test_scan_ios_report_not_saved(self):
+        save_result(TEST_MD5, {'is_flutter': True, 'findings': []})
+        with tempfile.TemporaryDirectory() as tmp, mock.patch(
+                'mobsf.StaticAnalyzer.views.flutter.ios_report.'
+                'ios_analysis_task'):
+            self._project(tmp)
+            # MobSF's iOS task logs its own errors and saves nothing
+            self.assertFalse(scan_ios_report(TEST_MD5, self._app_dic(tmp)))
+        self.assertFalse(load_result(TEST_MD5).get('ios_report'))
+
+    def test_scan_ios_report_skips_and_survives(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch(
+                'mobsf.StaticAnalyzer.views.flutter.ios_report.'
+                'ios_analysis_task') as task:
+            self._project(tmp, xcode=False)
+            self.assertFalse(scan_ios_report(TEST_MD5, self._app_dic(tmp)))
+            task.assert_not_called()
+        with tempfile.TemporaryDirectory() as tmp, mock.patch(
+                'mobsf.StaticAnalyzer.views.flutter.ios_report.'
+                'ios_analysis_task', side_effect=RuntimeError('boom')):
+            self._project(tmp)
+            self.assertFalse(scan_ios_report(TEST_MD5, self._app_dic(tmp)))
+        self.assertFalse(scan_ios_report('bad', {'app_dir': '/'}))
+
+    def test_requested_platform(self):
+        rf = RequestFactory()
+        self.assertEqual(
+            requested_platform(rf.get('/pdf/x/', {'platform': 'ios'})), 'ios')
+        self.assertEqual(requested_platform(
+            rf.post('/api/v1/report_json', {'platform': 'ios'})), 'ios')
+        for bad in ('android', 'IOS', '../ios', ''):
+            self.assertIsNone(requested_platform(
+                rf.get('/pdf/x/', {'platform': bad})))
+        self.assertIsNone(requested_platform(rf.get('/pdf/x/')))
+        self.assertIsNone(requested_platform(None))
+
+    def test_report_link_rendered(self):
+        flutter = {'is_flutter': True, 'project_root': '.', 'packages': [],
+                   'deep_linking': {'android': False, 'ios': False},
+                   'osv': None, 'code_analysis': {}, 'assets': [],
+                   'asset_secrets': [], 'findings': [],
+                   'platform_channels': [], 'ios_shell': None,
+                   'ios_report': True}
+        web = render_to_string('static_analysis/flutter/section.html',
+                               {'flutter': flutter, 'md5': TEST_MD5})
+        self.assertIn(f'/static_analyzer_ios/{TEST_MD5}/', web)
+        flutter['ios_report'] = False
+        web = render_to_string('static_analysis/flutter/section.html',
+                               {'flutter': flutter, 'md5': TEST_MD5})
+        self.assertNotIn('static_analyzer_ios', web)
+
+
+class RecentScanTests(TestCase):
+
+    def test_android_details_kept(self):
+        RecentScansDB.objects.create(
+            MD5=TEST_MD5, APP_NAME='Demo', PACKAGE_NAME='com.example.demo',
+            VERSION_NAME='1.0')
+        StaticAnalyzerAndroid.objects.create(MD5=TEST_MD5)
+        update_recent_scan(TEST_MD5, {
+            'APP_NAME': 'Runner', 'PACKAGE_NAME': 'com.example.ios',
+            'VERSION_NAME': '$(FLUTTER_BUILD_NAME)'})
+        row = RecentScansDB.objects.get(MD5=TEST_MD5)
+        self.assertEqual((row.APP_NAME, row.PACKAGE_NAME, row.VERSION_NAME),
+                         ('Demo', 'com.example.demo', '1.0'))
+
+    def test_empty_android_details_filled(self):
+        # Flutter manifests have no package attribute: Android finds none
+        RecentScansDB.objects.create(MD5=TEST_MD5)
+        StaticAnalyzerAndroid.objects.create(MD5=TEST_MD5)
+        update_recent_scan(TEST_MD5, {
+            'APP_NAME': 'Channel Demo', 'PACKAGE_NAME': 'com.example.demo',
+            'VERSION_NAME': '$(FLUTTER_BUILD_NAME)'})
+        row = RecentScansDB.objects.get(MD5=TEST_MD5)
+        self.assertEqual((row.APP_NAME, row.PACKAGE_NAME, row.VERSION_NAME),
+                         ('Channel Demo', 'com.example.demo', ''))
+
+    def test_ios_only_updated(self):
+        RecentScansDB.objects.create(MD5=TEST_MD5)
+        update_recent_scan(TEST_MD5, {
+            'APP_NAME': 'App', 'PACKAGE_NAME': 'com.example.app',
+            'VERSION_NAME': '2.0'})
+        row = RecentScansDB.objects.get(MD5=TEST_MD5)
+        self.assertEqual(row.APP_NAME, 'App')
