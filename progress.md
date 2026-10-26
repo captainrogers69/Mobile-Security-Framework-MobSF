@@ -13,8 +13,8 @@ date and notes as work lands. Last updated: 2026-10-25
 | Decisions | 6 | 6 | ✅ |
 | Phase 0 — Git setup | 8 | 8 | ✅ |
 | Phase 0 — Services & credentials | 1 | 3 | 🟡 |
-| Upstream contribution | 2 | 6 | 🟡 |
-| Phase 1 — Detection & strings | 0 | 9 | 🟡 |
+| Upstream contribution | 3 | 6 | 🟡 |
+| Phase 1 — Detection & strings | 1 | 9 | 🟡 |
 | Phase 2 — Snapshot, checks, CLI | 0 | 11 | ⬜ |
 | Phase 3 — Source ZIP | 0 | 4 | ⬜ |
 | Phase 4 — Dynamic (Android) | 0 | 4 | ⬜ |
@@ -67,7 +67,7 @@ date and notes as work lands. Last updated: 2026-10-25
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
 | U1 | Feature-request issue upstream | ✅ | 2026-10-23 | MobSF#2722, assigned `ajinabraham`. Asks: core fit, external parser (blutter) OK, report section vs folded, code layout. Wait for answers before first Flutter PR |
-| U2 | Small focused PRs from `upstream/master` | 🟡 | 2026-10-25 | MobSF#2721 (env flags) closed by maintainer, superseded by his broader MobSF#2724 (merged 2026-10-24, same `env.py`/`env_flag()` approach, only `1` enables). Next upstream PR: Flutter step 1 after #2722 answers |
+| U2 | Small focused PRs from `upstream/master` | ✅ | 2026-10-26 | First merged: MobSF#2730 (Dart strings from `libapp.so`), approved and merged by `ajinabraham` 2026-10-25, all 13 CI checks green (Linux/macOS/Windows). He merged master in and dropped our `tests_elf.py`, kept `elf.py` as written. Earlier: #2721 superseded by his #2724 |
 | U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | 🟡 | 2026-10-23 | #2721 uses PR template; lint + tests pass. Security-relevant fixes: decide public PR vs private advisory (SECURITY.md) before pushing to fork |
 | U4 | GPL-3.0-compatible dependencies only | ✅ | 2026-10-23 | blutter MIT ✅, reFlutter GPL-3.0 ✅, darter AGPL-3.0 ⚠️ (allowed via GPLv3 §13, network clause applies; old Dart only), Doldrums and Guardsquare flutter-re-demo have no license ❌ (reference only). Recommend blutter for F7 |
 | U5 | Fork-only files kept out of upstream PRs | 🟡 | 2026-10-23 | Upstream branches cut from `upstream/master`; #2721 has no fork-only files |
@@ -82,7 +82,7 @@ date and notes as work lands. Last updated: 2026-10-25
 | F3 | Engine + Dart SDK version, known CVEs | 🟡 | 2026-10-25 | `flutter/snapshot.py` reads snapshot hash + features. `flutter/versions.py` + `dart_versions.json`: 24 hashes, Dart 2.14.0–3.13.7 / Flutter 2.5.0–3.47.8, self-generated from official Dart SDKs (`scripts/update_flutter_dart_versions.py`, reproduces table byte for byte). Dart 2.12/2.13 not covered (no arm64 SDK). TODO: engine version, CVEs |
 | F4 | Obfuscation / split-debug-info detection | ⬜ | | |
 | F5 | Every `libapp.so` across ABIs and splits | 🟡 | 2026-10-25 | All ABIs + `split_apks/*` covered in `detect.py`; real APK shows 3 ABIs |
-| F6 | String extraction → secrets, URLs, configs | 🟡 | 2026-10-25 | Bug found: `ELFChecksec.strings()` missed all Dart strings in `libapp.so` (lief returns C strings only). Fixed in `elf.py` (a5991e7b): strings 27 → 12342, hardcoded token + URL now reported; `libflutter.so` unchanged; integration tests same as before. iOS already fine. Upstream PR candidate |
+| F6 | String extraction → secrets, URLs, configs | ✅ | 2026-10-26 | `ELFChecksec.strings()` missed all Dart strings in `libapp.so` (lief returns C strings only). Fixed upstream in MobSF#2730 (merged): strings 27 → 12342, hardcoded secrets/URLs now go through MobSF's existing secret/URL/Firebase checks; `libflutter.so` unchanged. iOS already used `strings_on_binary()` |
 | F9 | `flutter_assets/` audit | 🟡 | 2026-10-25 | `flutter/assets.py`: flags `.env`, Firebase configs, keys, DBs, named configs (names), then scans text assets for secrets with MobSF's `is_secret_key` + `detect_known_secrets`. Verified on real APK with bundled `.env` |
 | F26 | Flutter section in HTML/PDF/JSON report | ⬜ | | |
 | F27 | REST API parity | ⬜ | | |
@@ -156,3 +156,4 @@ date and notes as work lands. Last updated: 2026-10-25
 | 2026-10-25 | GitHub disabled Actions on the fork (ticket to GitHub Support pending). PR #6 merged: fork CI runs Linux-only test matrix and amd64-only Docker test. PR #5 merged via admin bypass |
 | 2026-10-25 | Flutter F1/F2/F3/F5 core logic on `feat/flutter-detection` (60be2628, 1ad840b8): 25 unit tests, verified on real APKs. Upstream push URL set to `no_push` locally |
 | 2026-10-25 | Dart version table (619e42cd, af6867f0), F9 asset audit + secret scan (14430672, 6a6e6b1a), F6 Dart strings fix in `elf.py` (a5991e7b). 54 Flutter tests |
+| 2026-10-26 | MobSF#2730 merged upstream (first merged contribution): F6 ✅, U2 ✅. Branch `fix/elf-dart-strings` deleted |
