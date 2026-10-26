@@ -114,8 +114,8 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | F14 | Root/jailbreak/tamper detection presence | ✅ | 2026-10-26 | Package level: detection package good / absent info (resilience-1). Package names verified on pub.dev |
 | F15 | Deep links vs manifest/plist | ✅ | 2026-10-26 | `deeplinks.py`: `flutter_deeplinking_enabled` (manifest) / `FlutterDeepLinkingEnabled` (Info.plist) → info (cwe-939, platform-1), APK/IPA and project ZIP |
 | F16 | Sensitive logging | 🟡 | 2026-10-26 | Dart rule `dart_logging` (print/debugPrint, info). No binary-level check |
-| F17 | MASVS v2 + CWE mapping | ⬜ | | |
-| F29 | CLI + SARIF output | ⬜ | | From Q6 |
+| F17 | MASVS v2 + CWE mapping | ✅ | 2026-10-26 | Every Flutter finding has a MASVS v2 category and, where one applies, a CWE (none on "good" findings or on Dart advisories without a published CWE). Shown in report and API, SARIF tags |
+| F29 | CLI + SARIF output | ✅ | 2026-10-26 | `manage.py flutter_scan` (`--format json\|sarif`, `--output`, `--fail-on`, `--osv`), SARIF 2.1.0 with masked secrets. See `docs/flutter.md` |
 
 ## Phase 3 — Source-ZIP flow
 
@@ -150,7 +150,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | N3 | ≤ 2 min added per 50 MB APK | ⬜ | | |
 | N4 | Tools baked into Docker image | ⬜ | | |
 | N5 | Test corpus ≥ 10 Flutter apps in CI | 🟡 | 2026-10-26 | 32 apps: 8 builds of 3 ordinary apps (template, plugins, http; Android release/debug/obfuscated, iOS release) with Flutter 3.44.9, 3.27.4, 3.10.6, 3.0.5 (Dart 3.12 to 2.17). `scripts/flutter_corpus/build.sh`, `fetch_sdk.sh`, `scripts/flutter_corpus_check.py` with expected results; 32/32 match. Found and fixed a false positive: JS channel reported for every webview_flutter 3.x app. To do: run in CI once Actions is back |
-| N6 | `tox -e lint` clean + unit tests | ⬜ | | |
+| N6 | `tox -e lint` clean + unit tests | ✅ | 2026-10-26 | Lint clean on every PR; 173 Flutter unit tests. Locally 2 integration tests need missing tools (wkhtmltopdf, x86 class-dump), same on upstream master |
 
 ---
 
