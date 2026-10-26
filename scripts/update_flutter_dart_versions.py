@@ -9,6 +9,9 @@ from Flutter's official releases JSON (dart_sdk_version).
 flutter_engines.json: engine revision (bin/internal/engine.version at each
 stable Flutter tag) -> Flutter versions. libflutter.so embeds the revision.
 
+flutter_dart.json: stable Flutter version -> the Dart version it ships, from
+the same releases JSON.
+
 Usage (from the repository root):
     python scripts/update_flutter_dart_versions.py          # new versions
     python scripts/update_flutter_dart_versions.py --all    # rebuild
@@ -42,6 +45,7 @@ from mobsf.StaticAnalyzer.views.flutter.snapshot import (  # noqa: E402
 
 DATA_FILE = ROOT / 'mobsf/StaticAnalyzer/views/flutter/dart_versions.json'
 ENGINE_FILE = ROOT / 'mobsf/StaticAnalyzer/views/flutter/flutter_engines.json'
+FLUTTER_DART_FILE = ROOT / 'mobsf/StaticAnalyzer/views/flutter/flutter_dart.json'
 ENGINE_VERSION = ('https://raw.githubusercontent.com/flutter/flutter/'
                   '{}/bin/internal/engine.version')
 REV_RE = re.compile(r'^[0-9a-f]{40}$')
@@ -161,6 +165,15 @@ def build_table(dart_hashes, flutter_map):
         for snap, e in table.items()}
 
 
+def flutter_dart_table(flutter_map):
+    """Map Flutter version -> Dart version, ordered by Flutter version."""
+    dart_of = {
+        flutter: dart for dart, versions in flutter_map.items()
+        for flutter in versions}
+    return {flutter: dart_of[flutter]
+            for flutter in sorted(dart_of, key=vkey)}
+
+
 def engine_table(flutter_versions, existing):
     """Map engine revision -> sorted Flutter versions."""
     rev_by_flutter = {
@@ -194,6 +207,7 @@ def main():
                         help='only these Dart versions')
     parser.add_argument('--output', default=str(DATA_FILE))
     parser.add_argument('--engines-output', default=str(ENGINE_FILE))
+    parser.add_argument('--flutter-dart-output', default=str(FLUTTER_DART_FILE))
     args = parser.parse_args()
 
     out = Path(args.output)
@@ -216,6 +230,11 @@ def main():
     table = build_table(dart_hashes, flutter_map)
     out.write_text(json.dumps(table, indent=1) + '\n')
     print(f'Wrote {len(table)} hashes to {out}')
+
+    flutter_dart = flutter_dart_table(flutter_map)
+    flutter_dart_out = Path(args.flutter_dart_output)
+    flutter_dart_out.write_text(json.dumps(flutter_dart, indent=1) + '\n')
+    print(f'Wrote {len(flutter_dart)} Flutter versions to {flutter_dart_out}')
 
     engines_out = Path(args.engines_output)
     existing = {}

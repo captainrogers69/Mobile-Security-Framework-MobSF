@@ -77,6 +77,7 @@ from mobsf.StaticAnalyzer.views.flutter.plugins import (
     app_packages,
     base_package,
     flutter_plugins,
+    mobile_packages,
 )
 from mobsf.StaticAnalyzer.views.flutter.symbols import uses_js_channels
 from mobsf.StaticAnalyzer.views.flutter.source import (
@@ -94,8 +95,11 @@ from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
 )
 from mobsf.StaticAnalyzer.views.flutter.versions import (
+    dart_for_flutter,
     dart_version,
     load_dart_versions,
+    load_flutter_dart,
+    narrow_dart,
 )
 
 
@@ -365,6 +369,36 @@ class DartVersionTests(SimpleTestCase):
             # A Dart release has exactly one snapshot hash
             self.assertFalse(seen & set(entry['dart']))
             seen |= set(entry['dart'])
+
+    def test_dart_for_flutter(self):
+        self.assertEqual(dart_for_flutter(['3.27.4']), ['3.6.2'])
+        self.assertEqual(dart_for_flutter(['3.10.6']), ['3.0.6'])
+        self.assertEqual(dart_for_flutter(['3.0.5']), ['2.17.6'])
+        self.assertEqual(
+            dart_for_flutter(['3.27.3', '3.27.4']), ['3.6.1', '3.6.2'])
+        self.assertEqual(dart_for_flutter(['9.9.9']), [])
+        self.assertEqual(dart_for_flutter([]), [])
+        self.assertEqual(dart_for_flutter(None), [])
+
+    def test_narrow_dart(self):
+        snap = ['3.6.0', '3.6.1', '3.6.2']
+        # Exact Flutter version: its Dart release
+        self.assertEqual(narrow_dart(snap, ['3.27.4']), ['3.6.2'])
+        # Flutter unknown: snapshot list unchanged
+        self.assertEqual(narrow_dart(snap, []), snap)
+        self.assertEqual(narrow_dart(snap, ['9.9.9']), snap)
+        # Conflicting sources: keep the snapshot list
+        self.assertEqual(narrow_dart(snap, ['3.10.6']), snap)
+        # No snapshot (debug build): Dart from the Flutter version
+        self.assertEqual(narrow_dart([], ['3.27.4']), ['3.6.2'])
+
+    def test_flutter_dart_table_integrity(self):
+        semver = re.compile(r'^\d+\.\d+\.\d+$')
+        table = load_flutter_dart()
+        self.assertGreater(len(table), 100)
+        for flutter, dart in table.items():
+            self.assertRegex(flutter, semver)
+            self.assertRegex(dart, semver)
 
 
 FA = 'assets/flutter_assets/'
@@ -1595,7 +1629,8 @@ class BinaryAnalysisTests(SimpleTestCase):
         self.assertEqual(res['build_mode'], 'release')
         self.assertEqual(res['abis'], ['arm64-v8a'])
         self.assertEqual(res['snapshot_hash'], SDK_3_12_HASH)
-        self.assertEqual(res['dart'], ['3.12.1', '3.12.2'])
+        # Engine names Flutter 3.44.9, which ships Dart 3.12.2
+        self.assertEqual(res['dart'], ['3.12.2'])
         self.assertEqual(res['flutter'], ['3.44.9'])
         self.assertEqual(res['engine'], ENGINE_3_44_9)
         self.assertFalse(res['obfuscated'])
@@ -1675,6 +1710,13 @@ class AppPackagesTests(SimpleTestCase):
             'webview_flutter_wkwebview', 'plugin_platform_interface',
             'flutter', 'http']),
             ['flutter', 'http', 'shared_preferences', 'webview_flutter'])
+
+    def test_mobile_drops_desktop_helpers(self):
+        # Desktop plugin code is compiled in but never runs on a phone
+        self.assertEqual(mobile_packages([
+            'path_provider', 'path_provider_windows', 'win32',
+            'win32_registry', 'xdg_directories', 'ffi', 'path']),
+            ['ffi', 'path', 'path_provider'])
 
 
 PROJECT_PUBSPEC = """name: demo

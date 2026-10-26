@@ -11,12 +11,7 @@
   "3.0.5"
  ],
  "dart": [
-  "2.17.0",
-  "2.17.1",
-  "2.17.3",
-  "2.17.5",
-  "2.17.6",
-  "2.17.7"
+  "2.17.6"
  ],
  "obfuscated": false,
  "split_debug_info": false,
@@ -31,9 +26,7 @@
   "plugins",
   "shared_preferences",
   "vector_math",
-  "webview_flutter",
-  "win32",
-  "xdg_directories"
+  "webview_flutter"
  ],
  "plugins": [
   "flutter_secure_storage",

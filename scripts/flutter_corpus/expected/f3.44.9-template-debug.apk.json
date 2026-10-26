@@ -10,7 +10,9 @@
  "flutter": [
   "3.44.9"
  ],
- "dart": [],
+ "dart": [
+  "3.12.2"
+ ],
  "obfuscated": null,
  "split_debug_info": null,
  "packages": [],

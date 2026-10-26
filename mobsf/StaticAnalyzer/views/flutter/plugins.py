@@ -26,6 +26,10 @@ MANGLED_RE = re.compile(rb'_TtC([0-9]{1,3}[A-Za-z0-9_]{1,400})')
 DEX_RE = re.compile(r'^classes[0-9]*\.dex$')
 PUB_NAME_RE = re.compile(r'^[a-z][a-z0-9_]{0,63}$')
 EXE_RE = re.compile(r'^[A-Za-z0-9_. -]{1,100}$')
+# Helper packages used only by desktop plugin implementations; compiled
+# into mobile apps with the plugin but never run there
+DESKTOP_ONLY_PACKAGES = frozenset({
+    'win32', 'win32_registry', 'xdg_directories'})
 # Federated plugin implementation suffixes
 PLATFORM_SUFFIXES = ('_android', '_ios', '_foundation', '_darwin',
                      '_wkwebview', '_macos', '_linux', '_windows', '_web',
@@ -45,6 +49,12 @@ def app_packages(names):
     """App-facing package inventory: federated names mapped, internals dropped."""
     return sorted({base_package(n) for n in names
                    if not n.endswith('_platform_interface')})
+
+
+def mobile_packages(names):
+    """Package inventory of a mobile app, without desktop-only helpers."""
+    return [p for p in app_packages(names)
+            if p not in DESKTOP_ONLY_PACKAGES]
 
 
 def _demangle_plugin(run):

@@ -11,7 +11,9 @@
  "flutter": [
   "3.27.4"
  ],
- "dart": [],
+ "dart": [
+  "3.6.2"
+ ],
  "obfuscated": null,
  "split_debug_info": null,
  "packages": [],
