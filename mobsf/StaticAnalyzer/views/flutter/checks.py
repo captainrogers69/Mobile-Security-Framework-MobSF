@@ -99,3 +99,28 @@ def flutter_checks(packages):
             [], '', 'resilience-1'))
     return sorted(
         findings, key=lambda f: (SEVERITY_ORDER[f['severity']], f['id']))
+
+
+def flutter_binary_checks(deep_linking=None, js_channels=None):
+    """Findings from Flutter deep linking flags and Dart API names."""
+    findings = []
+    if deep_linking:
+        findings.append(_finding(
+            'flutter_deep_linking', 'info',
+            'Flutter deep linking enabled',
+            'Flutter deep linking is enabled: the path of an incoming link '
+            'is pushed to the app router. Ensure every reachable route '
+            'validates its arguments and requires authentication where '
+            'needed.',
+            [], 'cwe-939', 'platform-1'))
+    if js_channels:
+        findings.append(_finding(
+            'flutter_js_channel', 'info',
+            'WebView JavaScript channel',
+            'The app exposes Dart code to web content through a WebView '
+            'JavaScript channel. Ensure only trusted pages are loaded and '
+            'messages from the page are validated. (Detected from Dart '
+            'names, which obfuscated builds remove.)',
+            [], 'cwe-749', 'platform-7'))
+    return sorted(
+        findings, key=lambda f: (SEVERITY_ORDER[f['severity']], f['id']))

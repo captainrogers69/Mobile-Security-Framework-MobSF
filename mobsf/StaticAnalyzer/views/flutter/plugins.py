@@ -16,7 +16,10 @@ from mobsf.MobSF.security import (
     is_path_traversal,
     is_safe_path,
 )
-from mobsf.StaticAnalyzer.views.flutter.fileio import open_regular
+from mobsf.StaticAnalyzer.views.flutter.fileio import (
+    open_regular,
+    scan_regex,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +33,7 @@ EXE_RE = re.compile(r'^[A-Za-z0-9_. -]{1,100}$')
 PLATFORM_SUFFIXES = ('_android', '_ios', '_foundation', '_darwin',
                      '_wkwebview', '_macos', '_linux', '_windows', '_web',
                      '_apple')
-MAX_SIZE = 512 * 1024 * 1024
 PLIST_MAX_SIZE = 1024 * 1024
-CHUNK_SIZE = 4 * 1024 * 1024
-TAIL = 512
 
 
 def base_package(name):
@@ -42,27 +42,6 @@ def base_package(name):
         if name.endswith(suffix) and len(name) > len(suffix):
             return name[:-len(suffix)]
     return name
-
-
-def _scan(path, regex):
-    """Yield regex matches from a file read in chunks."""
-    fobj = open_regular(path, MAX_SIZE)
-    if fobj is None:
-        return
-    with fobj:
-        buf = b''
-        while True:
-            chunk = fobj.read(CHUNK_SIZE)
-            eof = not chunk
-            buf += chunk
-            for match in regex.finditer(buf):
-                # The match may continue in the next chunk
-                if match.end() == len(buf) and not eof:
-                    continue
-                yield match
-            if eof:
-                return
-            buf = buf[-TAIL:]
 
 
 def _demangle_plugin(run):
@@ -134,7 +113,7 @@ def flutter_plugins(app_dir, rel_paths):
         try:
             if DEX_RE.match(parts[-1]):
                 full = _safe_file(app_dir, rel)
-                for match in (_scan(full, REGISTRANT_RE) if full else ()):
+                for match in (scan_regex(full, REGISTRANT_RE) or [] if full else []):
                     _add(found, 'android', match.group(1).decode(),
                          match.group(2).decode())
         except Exception:
@@ -152,7 +131,7 @@ def flutter_plugins(app_dir, rel_paths):
     for app_rel in sorted(app_bundles):
         try:
             exe = _ios_executable(app_dir, app_rel)
-            for match in (_scan(exe, MANGLED_RE) if exe else ()):
+            for match in (scan_regex(exe, MANGLED_RE) or [] if exe else []):
                 plugin = _demangle_plugin(match.group(1))
                 if plugin:
                     _add(found, 'ios', *plugin)

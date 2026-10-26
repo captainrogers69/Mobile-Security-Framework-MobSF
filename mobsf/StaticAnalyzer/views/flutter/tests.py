@@ -6,6 +6,8 @@ import re
 import tempfile
 from pathlib import Path
 
+from defusedxml.minidom import parseString
+
 from django.test import SimpleTestCase
 
 from mobsf.StaticAnalyzer.views.common.binary.elf import ELFChecksec
@@ -18,8 +20,13 @@ from mobsf.StaticAnalyzer.views.flutter.assets import (
     audit_assets,
 )
 from mobsf.StaticAnalyzer.views.flutter.checks import (
+    flutter_binary_checks,
     flutter_checks,
     load_check_packages,
+)
+from mobsf.StaticAnalyzer.views.flutter.deeplinks import (
+    android_deep_linking,
+    ios_deep_linking,
 )
 from mobsf.StaticAnalyzer.views.flutter.detect import (
     detect_flutter,
@@ -42,6 +49,7 @@ from mobsf.StaticAnalyzer.views.flutter.plugins import (
     base_package,
     flutter_plugins,
 )
+from mobsf.StaticAnalyzer.views.flutter.symbols import uses_js_channels
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
 )
@@ -1089,3 +1097,76 @@ class FlutterChecksTests(SimpleTestCase):
                 self.assertRegex(pkg, r'^[a-z][a-z0-9_]*$')
         self.assertFalse(set(groups['insecure_storage'])
                          & set(groups['secure_storage']))
+
+
+MANIFEST = (
+    '<?xml version="1.0" encoding="utf-8"?>'
+    '<manifest xmlns:android="http://schemas.android.com/apk/res/android" '
+    'package="com.example.app"><application><activity '
+    'android:name=".MainActivity">{meta}</activity></application></manifest>')
+DEEPLINK_META = ('<meta-data android:name="flutter_deeplinking_enabled" '
+                 'android:value="{value}" />')
+
+
+class DeepLinkingTests(SimpleTestCase):
+
+    def _manifest(self, meta=''):
+        return parseString(MANIFEST.format(meta=meta))
+
+    def test_android_flag(self):
+        self.assertTrue(android_deep_linking(self._manifest(
+            DEEPLINK_META.format(value='true'))))
+        self.assertFalse(android_deep_linking(self._manifest(
+            DEEPLINK_META.format(value='false'))))
+        self.assertIsNone(android_deep_linking(self._manifest()))
+        # Resource references cannot be resolved here
+        self.assertIsNone(android_deep_linking(self._manifest(
+            DEEPLINK_META.format(value='@bool/deeplinks'))))
+        self.assertIsNone(android_deep_linking(None))
+
+    def test_ios_flag(self):
+        self.assertTrue(ios_deep_linking({'FlutterDeepLinkingEnabled': True}))
+        self.assertFalse(
+            ios_deep_linking({'FlutterDeepLinkingEnabled': False}))
+        self.assertIsNone(ios_deep_linking({}))
+        self.assertIsNone(ios_deep_linking({'FlutterDeepLinkingEnabled': 'YES'}))
+        self.assertIsNone(ios_deep_linking(None))
+
+
+class JSChannelTests(SimpleTestCase):
+
+    def _bin(self, tmp, data):
+        path = Path(tmp) / 'libapp.so'
+        path.write_bytes(data)
+        return path
+
+    def test_channel_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(uses_js_channels(
+                self._bin(tmp, b'\x00\x01addJavaScriptChannel\x00')))
+
+    def test_channel_absent_or_partial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(uses_js_channels(
+                self._bin(tmp, b'\x00addJavaScriptChannelX\x00'
+                               b'xaddJavaScriptChannel\x00setJavaScriptMode')))
+
+    def test_unreadable(self):
+        self.assertIsNone(uses_js_channels('/nonexistent/libapp.so'))
+
+
+class BinaryChecksTests(SimpleTestCase):
+
+    def test_findings(self):
+        res = {f['id']: f for f in flutter_binary_checks(
+            deep_linking=True, js_channels=True)}
+        self.assertEqual(res['flutter_deep_linking']['severity'], 'info')
+        self.assertEqual(res['flutter_deep_linking']['cwe'], 'cwe-939')
+        self.assertEqual(res['flutter_deep_linking']['masvs'], 'platform-1')
+        self.assertEqual(res['flutter_js_channel']['severity'], 'info')
+        self.assertEqual(res['flutter_js_channel']['masvs'], 'platform-7')
+
+    def test_no_findings_when_off_or_unknown(self):
+        self.assertEqual(flutter_binary_checks(), [])
+        self.assertEqual(
+            flutter_binary_checks(deep_linking=False, js_channels=False), [])
