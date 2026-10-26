@@ -66,18 +66,25 @@ def _asset_type(name):
     return None
 
 
-def audit_assets(rel_paths):
-    """Return sorted [{'file', 'type'}] for sensitive flutter_assets files."""
+def classify_assets(rel_paths):
+    """Return sorted [{'file', 'type'}] for sensitive files by name."""
     found = {}
     for rel in rel_paths:
         rel = rel.replace('\\', '/')
         parts = PurePosixPath(rel).parts
-        if len(parts) < 2 or FLUTTER_ASSETS not in parts[:-1]:
+        if not parts:
             continue
         asset_type = _asset_type(parts[-1])
         if asset_type:
             found[rel] = asset_type
     return [{'file': f, 'type': t} for f, t in sorted(found.items())]
+
+
+def audit_assets(rel_paths):
+    """Return sorted [{'file', 'type'}] for sensitive flutter_assets files."""
+    return classify_assets(
+        rel for rel in rel_paths
+        if FLUTTER_ASSETS in PurePosixPath(rel.replace('\\', '/')).parts[:-1])
 
 
 def _json_pairs(text):

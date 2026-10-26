@@ -21,6 +21,7 @@ from mobsf.StaticAnalyzer.views.flutter.advisories import (
 from mobsf.StaticAnalyzer.views.flutter.assets import (
     asset_secrets,
     audit_assets,
+    classify_assets,
 )
 from mobsf.StaticAnalyzer.views.flutter.binary import flutter_binary_analysis
 from mobsf.StaticAnalyzer.views.flutter.checks import (
@@ -64,6 +65,9 @@ from mobsf.StaticAnalyzer.views.flutter.symbols import uses_js_channels
 from mobsf.StaticAnalyzer.views.flutter.source import (
     is_flutter_source,
     pubspec_lock_packages,
+)
+from mobsf.StaticAnalyzer.views.flutter.source_analysis import (
+    flutter_source_analysis,
 )
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
@@ -1634,3 +1638,100 @@ class AppPackagesTests(SimpleTestCase):
             'webview_flutter_wkwebview', 'plugin_platform_interface',
             'flutter', 'http']),
             ['flutter', 'http', 'shared_preferences', 'webview_flutter'])
+
+
+PROJECT_PUBSPEC = """name: demo
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  assets:
+    - .env
+    - assets/
+    - ../../etc/passwd
+"""
+PROJECT_LOCK = """packages:
+  shared_preferences:
+    dependency: "direct main"
+    source: hosted
+    version: "2.5.6"
+  http:
+    dependency: "direct main"
+    source: hosted
+    version: "0.12.0"
+"""
+PROJECT_FILES = {
+    'pubspec.yaml': PROJECT_PUBSPEC,
+    'pubspec.lock': PROJECT_LOCK,
+    '.env': 'API_KEY=abc123\n',
+    'assets/config.json': '{"apiKey": "AIzaFAKE"}',
+    'assets/logo.png': 'png',
+    'assets/nested/secrets.json': '{"token": "deep"}',
+    'lib/main.dart': DART_POSITIVE['dart_bad_certificate_callback'],
+    'android/app/src/main/AndroidManifest.xml': MANIFEST.format(
+        meta=DEEPLINK_META.format(value='true')),
+    'ios/Runner/Info.plist': plistlib.dumps(
+        {'FlutterDeepLinkingEnabled': False}).decode(),
+}
+
+
+class ClassifyAssetsTests(SimpleTestCase):
+
+    def test_classify_outside_flutter_assets(self):
+        self.assertEqual(classify_assets(['.env', 'assets/config.json',
+                                          'assets/logo.png']), [
+            {'file': '.env', 'type': 'env'},
+            {'file': 'assets/config.json', 'type': 'config'}])
+
+
+class SourceAnalysisTests(SimpleTestCase):
+
+    def _project(self, tmp, files):
+        for rel, data in files.items():
+            path = Path(tmp) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(data)
+
+    def test_project_without_osv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._project(tmp, PROJECT_FILES)
+            res = flutter_source_analysis(tmp)
+        self.assertTrue(res['is_flutter'])
+        self.assertEqual([p['name'] for p in res['packages']],
+                         ['http', 'shared_preferences'])
+        self.assertIsNone(res['osv'])
+        self.assertEqual(res['deep_linking'], {'android': True, 'ios': False})
+        self.assertIn('dart_bad_certificate_callback', res['code_analysis'])
+        # Declared assets only: dir entries are not recursive, traversal
+        # entries are dropped
+        self.assertEqual(res['assets'], [
+            {'file': '.env', 'type': 'env'},
+            {'file': 'assets/config.json', 'type': 'config'}])
+        secrets = {s['file']: s['secrets'] for s in res['asset_secrets']}
+        self.assertEqual(secrets['.env'], ['"API_KEY" : "abc123"'])
+        ids = {f['id']: f['severity'] for f in res['findings']}
+        self.assertEqual(ids['flutter_insecure_storage'], 'warning')
+        self.assertEqual(ids['flutter_deep_linking'], 'info')
+        self.assertFalse(any(i.startswith('flutter_osv_') for i in ids))
+
+    def test_project_with_osv(self):
+        session = _FakeSession(
+            {'results': [{'vulns': [{'id': HTTP_GHSA}]}, {}]},
+            {HTTP_GHSA: OSV_HTTP_VULN})
+        with tempfile.TemporaryDirectory() as tmp:
+            self._project(tmp, PROJECT_FILES)
+            res = flutter_source_analysis(tmp, osv_enabled=True,
+                                          osv_session=session)
+        self.assertEqual(res['osv'][0]['name'], 'http')
+        finding = [f for f in res['findings']
+                   if f['id'] == 'flutter_osv_http'][0]
+        self.assertEqual(finding['severity'], 'warning')
+        self.assertEqual(finding['cwe'], 'cwe-74')
+        self.assertEqual(finding['masvs'], 'code-5')
+        self.assertEqual(finding['packages'], ['http'])
+
+    def test_not_flutter_project(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._project(tmp, {'app/src/main/AndroidManifest.xml': 'x'})
+            self.assertEqual(flutter_source_analysis(tmp),
+                             {'is_flutter': False})
