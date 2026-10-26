@@ -1,0 +1,35 @@
+[
+ {
+  "id": "GHSA-frr6-h895-5pxp",
+  "cve": null,
+  "cwe": "CWE-295",
+  "severity": "high",
+  "summary": "TLS MitM due to compromised eMudhra intermediate CA certificates: dart:io trusts certificates forged with them until the app is rebuilt with a patched SDK",
+  "platforms": ["android"],
+  "fixed_dart": "3.13.7",
+  "fixed_flutter": "3.47.8",
+  "url": "https://github.com/dart-lang/sdk/security/advisories/GHSA-frr6-h895-5pxp"
+ },
+ {
+  "id": "GHSA-m9pm-2598-57rj",
+  "cve": "CVE-2022-3095",
+  "cwe": null,
+  "severity": "medium",
+  "summary": "Auth bypass: Uri parsing does not treat backslash as forward slash, which can bypass URL validation checks",
+  "platforms": ["android", "ios"],
+  "fixed_dart": "2.18.2",
+  "fixed_flutter": "3.3.3",
+  "url": "https://github.com/dart-lang/sdk/security/advisories/GHSA-m9pm-2598-57rj"
+ },
+ {
+  "id": "GHSA-c8mh-jj22-xg5h",
+  "cve": "CVE-2022-0451",
+  "cwe": null,
+  "severity": "medium",
+  "summary": "HttpClient forwards authorization and cookie headers on cross-origin redirects",
+  "platforms": ["android", "ios"],
+  "fixed_dart": "2.16.0",
+  "fixed_flutter": "2.10.0",
+  "url": "https://github.com/dart-lang/sdk/security/advisories/GHSA-c8mh-jj22-xg5h"
+ }
+]

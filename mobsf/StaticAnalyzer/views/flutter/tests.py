@@ -8,6 +8,10 @@ from pathlib import Path
 from django.test import SimpleTestCase
 
 from mobsf.StaticAnalyzer.views.common.binary.elf import ELFChecksec
+from mobsf.StaticAnalyzer.views.flutter.advisories import (
+    check_advisories,
+    load_advisories,
+)
 from mobsf.StaticAnalyzer.views.flutter.assets import (
     asset_secrets,
     audit_assets,
@@ -630,3 +634,61 @@ class FlutterEngineTests(SimpleTestCase):
             # A Flutter release has exactly one engine revision
             self.assertFalse(seen & set(versions))
             seen |= set(versions)
+
+
+TLS_GHSA = 'GHSA-frr6-h895-5pxp'
+
+
+class AdvisoryTests(SimpleTestCase):
+
+    def _ids(self, res):
+        return {a['id']: a['status'] for a in res}
+
+    def test_exact_flutter_version_affected(self):
+        res = check_advisories('android', flutter=['3.44.9'])
+        self.assertEqual(self._ids(res), {TLS_GHSA: 'affected'})
+        self.assertEqual(res[0]['severity'], 'high')
+
+    def test_platform_not_affected(self):
+        self.assertEqual(check_advisories('ios', flutter=['3.44.9']), [])
+
+    def test_patched_version(self):
+        self.assertEqual(check_advisories('android', flutter=['3.47.8']), [])
+
+    def test_dart_range_spanning_fix_is_possible(self):
+        dart = ['3.13.%d' % i for i in range(8)]
+        res = check_advisories('android', dart=dart)
+        self.assertEqual(self._ids(res), {TLS_GHSA: 'possibly affected'})
+
+    def test_old_dart_hits_runtime_cves(self):
+        res = check_advisories('ios', dart=['2.15.0', '2.15.1'])
+        self.assertEqual(
+            self._ids(res),
+            {'GHSA-c8mh-jj22-xg5h': 'affected',
+             'GHSA-m9pm-2598-57rj': 'affected'})
+
+    def test_flutter_preferred_over_dart_range(self):
+        dart = ['3.13.%d' % i for i in range(8)]
+        res = check_advisories('android', dart=dart, flutter=['3.47.8'])
+        self.assertEqual(res, [])
+
+    def test_unknown_version(self):
+        self.assertEqual(check_advisories('android'), [])
+
+    def test_sorted_by_severity(self):
+        res = check_advisories('android', dart=['2.15.0'])
+        self.assertEqual(res[0]['id'], TLS_GHSA)
+
+    def test_advisory_file_integrity(self):
+        semver = r'^\d+\.\d+\.\d+$'
+        advisories = load_advisories()
+        self.assertTrue(advisories)
+        for adv in advisories:
+            self.assertRegex(adv['fixed_dart'], semver)
+            self.assertRegex(adv['fixed_flutter'], semver)
+            self.assertIn(adv['severity'], ('low', 'medium', 'high',
+                                            'critical'))
+            self.assertTrue(set(adv['platforms']) <= {'android', 'ios'})
+            self.assertTrue(adv['url'].startswith(
+                'https://github.com/dart-lang/sdk/security/advisories/'
+                + adv['id']))
