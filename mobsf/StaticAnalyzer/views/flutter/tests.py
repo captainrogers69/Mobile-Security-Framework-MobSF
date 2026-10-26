@@ -2604,11 +2604,12 @@ class AppSecScoreTests(SimpleTestCase):
     def test_appsec_findings(self):
         save_result(TEST_MD5, SCORE_RESULT)
         found = appsec_findings(TEST_MD5)
+        # "good" items are left out: MobSF's score averages over high,
+        # warning and secure items, so they would dilute real issues
         self.assertEqual([(s, f['title'], f['section']) for s, f in found], [
             ('high', 'Debug build', 'flutter'),
             ('warning', 'iOS app: ATS exception', 'flutter'),
-            ('info', 'No SSL pinning', 'flutter'),
-            ('secure', 'Obfuscated', 'flutter')])
+            ('info', 'No SSL pinning', 'flutter')])
 
     def test_no_result_or_bad_hash(self):
         self.assertEqual(appsec_findings(TEST_MD5), [])
@@ -2624,5 +2625,20 @@ class AppSecScoreTests(SimpleTestCase):
                          ['Debug build'])
         self.assertEqual([f['section'] for f in after['warning']],
                          ['flutter'])
-        self.assertIn('Obfuscated', [f['title'] for f in after['secure']])
-        self.assertLess(after['security_score'], 100)
+        self.assertNotIn('Obfuscated', [f['title'] for f in after['secure']])
+        # A new issue never raises the score
+        self.assertLess(after['security_score'], before['security_score'] or 101)
+
+    def test_good_findings_do_not_raise_score(self):
+        data = self._android()
+        data['code_analysis']['findings'] = {'rule': {
+            'metadata': {'severity': 'high', 'description': 'Issue'},
+            'files': {}}}
+        before = get_android_dashboard(data, True)['security_score']
+        save_result(TEST_MD5, {'is_flutter': True, 'findings': [
+            {'id': 'flutter_debug_build', 'severity': 'high',
+             'title': 'Debug build', 'description': 'd'}] + [
+            {'id': f'good_{i}', 'severity': 'good', 'title': f'Good {i}',
+             'description': 'd'} for i in range(5)]})
+        after = get_android_dashboard(data, True)['security_score']
+        self.assertLessEqual(after, before)

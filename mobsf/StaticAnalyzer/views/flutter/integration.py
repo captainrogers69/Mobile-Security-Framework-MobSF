@@ -61,8 +61,10 @@ def load_result(checksum):
     return data if isinstance(data, dict) else None
 
 
-APPSEC_SEVERITY = {'high': 'high', 'warning': 'warning', 'info': 'info',
-                   'good': 'secure'}
+# "good" Flutter items stay in the Flutter section only: MobSF's score
+# averages over high, warning and secure items, so they would dilute
+# real issues (one high item scores 0, with five good ones 85)
+APPSEC_SEVERITY = {'high': 'high', 'warning': 'warning', 'info': 'info'}
 
 
 def appsec_findings(checksum):
