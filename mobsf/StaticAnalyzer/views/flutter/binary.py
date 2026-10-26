@@ -22,12 +22,15 @@ from mobsf.StaticAnalyzer.views.flutter.engine import flutter_engine_info
 from mobsf.StaticAnalyzer.views.flutter.fileio import safe_join
 from mobsf.StaticAnalyzer.views.flutter.obfuscation import obfuscation_info
 from mobsf.StaticAnalyzer.views.flutter.plugins import (
-    app_packages,
     flutter_plugins,
+    mobile_packages,
 )
 from mobsf.StaticAnalyzer.views.flutter.snapshot import read_snapshot_header
 from mobsf.StaticAnalyzer.views.flutter.symbols import uses_js_channels
-from mobsf.StaticAnalyzer.views.flutter.versions import dart_version
+from mobsf.StaticAnalyzer.views.flutter.versions import (
+    dart_version,
+    narrow_dart,
+)
 
 logger = logging.getLogger(__name__)
 BUILD_MODES = ('debug', 'profile', 'release')
@@ -55,14 +58,14 @@ def flutter_binary_analysis(app_dir, rel_paths, platform,
     # iOS Flutter.framework knows debug/profile/release precisely
     if build_mode != 'debug' and engine.get('build_mode') in BUILD_MODES:
         build_mode = engine['build_mode']
-    dart = versions['dart'] if versions else []
     flutter = engine.get('flutter') or []
+    dart = narrow_dart(versions['dart'] if versions else [], flutter)
     advisories = check_advisories(platform, dart=dart, flutter=flutter)
     obf = (obfuscation_info(snapshot, header['features'])
            if header else {'split_debug_info': None, 'obfuscated': None,
                            'packages': []})
     plugins = flutter_plugins(app_dir, rel_paths)
-    packages = app_packages(
+    packages = mobile_packages(
         [p['name'] for p in plugins] + obf['packages'])
     if platform == 'android':
         deep_linking = android_deep_linking(parsed_manifest)

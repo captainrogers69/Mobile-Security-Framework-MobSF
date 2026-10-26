@@ -9,7 +9,7 @@ Plan and status: [`requirements.md`](../requirements.md), [`progress.md`](../pro
 - Flutter detected, every ABI and split APK
 - Build mode: debug (ships `kernel_blob.bin`, Dart code recoverable: high), profile, release
 - Exact Flutter version (engine revision in `libflutter.so` or `Flutter.framework/Info.plist`)
-  and Dart version (snapshot hash)
+  and Dart version (the one that Flutter version ships; else the range of the snapshot hash)
 - Dart SDK security advisories that affect built apps, by version
 - Obfuscation (`--obfuscate`) and split debug info (`--split-debug-info`)
 - Plugin and package inventory, also for obfuscated apps (from native plugin registration)
@@ -64,9 +64,10 @@ don't spread them.
 
 ## Version tables
 
-`dart_versions.json` (snapshot hash → Dart/Flutter versions) and
-`flutter_engines.json` (engine revision → Flutter versions) are generated from the
-official Dart SDK archive and Flutter releases:
+`dart_versions.json` (snapshot hash → Dart/Flutter versions),
+`flutter_engines.json` (engine revision → Flutter versions) and `flutter_dart.json`
+(Flutter version → Dart version) are generated from the official Dart SDK archive and
+Flutter releases:
 
 ```
 python scripts/update_flutter_dart_versions.py          # add new releases
