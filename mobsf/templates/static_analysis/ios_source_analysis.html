@@ -194,7 +194,7 @@
             </a>
           </li>
             <li class="nav-item">
-              <a href="{% url "pdf" checksum=md5 %}" class="nav-link">
+              <a href="{% url "pdf" checksum=md5 %}?platform=ios" class="nav-link">
               <i class="nav-icon fas fa-file-pdf"></i>
               <p>
                 PDF Report
@@ -256,7 +256,7 @@
                     <span class="badge bg-success">Trackers Detection</span> <strong>{{ trackers.detected_trackers }}/{{ trackers.total_trackers }}</strong><br/>
                   {% endif %}
                 </p>
-                  <p> <a href="{% url 'appsec_dashboard' checksum=md5 %}" class="btn btn-outline-primary btn-sm" role="button"><i class="fas fa-user-shield"></i> MobSF Scorecard</a></p>
+                  <p> <a href="{% url 'appsec_dashboard' checksum=md5 %}?platform=ios" class="btn btn-outline-primary btn-sm" role="button"><i class="fas fa-user-shield"></i> MobSF Scorecard</a></p>
                 </div>
 
                 <div class="col-12 col-md-5">

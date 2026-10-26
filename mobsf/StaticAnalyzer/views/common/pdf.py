@@ -38,6 +38,7 @@ from mobsf.StaticAnalyzer.views.ios.db_interaction import (
     get_context_from_db_entry as idb)
 from mobsf.StaticAnalyzer.views.flutter.integration import (
     load_result as flutter_result,
+    requested_platform,
 )
 from mobsf.StaticAnalyzer.views.windows.db_interaction import (
     get_context_from_db_entry as wdb)
@@ -74,7 +75,11 @@ def pdf(request, checksum, api=False, jsonres=False):
         win_static_db = StaticAnalyzerWindows.objects.filter(
             MD5=checksum)
 
-        if android_static_db.exists():
+        # A Flutter project ZIP has an Android and an iOS report
+        if (requested_platform(request) == 'ios'
+                and ios_static_db.exists()):
+            context, template = handle_pdf_ios(ios_static_db)
+        elif android_static_db.exists():
             context, template = handle_pdf_android(android_static_db)
         elif ios_static_db.exists():
             context, template = handle_pdf_ios(ios_static_db)

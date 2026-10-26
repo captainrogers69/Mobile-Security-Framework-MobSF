@@ -12,6 +12,7 @@ from pathlib import Path
 
 from django.conf import settings
 
+from mobsf.MobSF.security import is_pipe_or_link
 from mobsf.MobSF.utils import (
     append_scan_status,
     is_md5,
@@ -19,6 +20,7 @@ from mobsf.MobSF.utils import (
 )
 from mobsf.StaticAnalyzer.views.flutter.binary import flutter_binary_analysis
 from mobsf.StaticAnalyzer.views.flutter.fileio import open_regular
+from mobsf.StaticAnalyzer.views.flutter.source import is_flutter_source
 from mobsf.StaticAnalyzer.views.flutter.source_analysis import (
     flutter_source_analysis,
 )
@@ -59,6 +61,32 @@ def load_result(checksum):
     except (ValueError, OSError):
         return None
     return data if isinstance(data, dict) else None
+
+
+# Reports a request may ask for when a scan hash has more than one
+PLATFORMS = ('ios',)
+
+
+def requested_platform(request):
+    """'ios' when a request asks for the iOS report of a scan, else None."""
+    if request is None:
+        return None
+    value = request.GET.get('platform') or request.POST.get('platform')
+    return value if value in PLATFORMS else None
+
+
+def flutter_ios_dir(app_dir):
+    """ios/ of a Flutter project with an Xcode project ('<path>/'), or None."""
+    root = is_flutter_source(app_dir)
+    if root is None:
+        return None
+    ios = root / 'ios'
+    if is_pipe_or_link(ios) or not ios.is_dir():
+        return None
+    if not any(p.suffix == '.xcodeproj' and not is_pipe_or_link(p)
+               and p.is_dir() for p in ios.iterdir()):
+        return None
+    return ios.as_posix() + '/'
 
 
 def _rel_files(app_dir):
