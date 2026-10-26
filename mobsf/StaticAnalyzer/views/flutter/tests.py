@@ -50,6 +50,10 @@ from mobsf.StaticAnalyzer.views.flutter.plugins import (
     flutter_plugins,
 )
 from mobsf.StaticAnalyzer.views.flutter.symbols import uses_js_channels
+from mobsf.StaticAnalyzer.views.flutter.source import (
+    is_flutter_source,
+    pubspec_lock_packages,
+)
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
 )
@@ -1170,3 +1174,110 @@ class BinaryChecksTests(SimpleTestCase):
         self.assertEqual(flutter_binary_checks(), [])
         self.assertEqual(
             flutter_binary_checks(deep_linking=False, js_channels=False), [])
+
+
+PUBSPEC = """name: demo
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+"""
+PUBSPEC_LOCK = """packages:
+  http:
+    dependency: "direct main"
+    description:
+      name: http
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
+  path:
+    dependency: transitive
+    description:
+      name: path
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.9.0-dev.1"
+  flutter:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+  mylib:
+    dependency: "direct main"
+    description:
+      path: "../mylib"
+    source: path
+    version: "0.1.0"
+sdks:
+  dart: ">=3.4.0 <4.0.0"
+"""
+
+
+class FlutterSourceTests(SimpleTestCase):
+
+    def _tree(self, tmp, files):
+        for rel, data in files.items():
+            path = Path(tmp) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(data)
+
+    def test_project_at_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'pubspec.yaml': PUBSPEC, 'lib/main.dart': ''})
+            self.assertEqual(is_flutter_source(tmp), Path(tmp))
+
+    def test_project_one_level_down(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'demo/pubspec.yaml': PUBSPEC})
+            self.assertEqual(is_flutter_source(tmp), Path(tmp) / 'demo')
+
+    def test_pure_dart_package_is_not_flutter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'pubspec.yaml': 'name: x\ndependencies:\n'
+                                             '  http: any\n'})
+            self.assertIsNone(is_flutter_source(tmp))
+
+    def test_malformed_pubspec(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'pubspec.yaml': 'name: [unclosed\n'})
+            self.assertIsNone(is_flutter_source(tmp))
+
+    def test_yaml_python_tags_not_executed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'pubspec.yaml':
+                             '!!python/object/apply:os.system ["touch pwned"]\n'})
+            self.assertIsNone(is_flutter_source(tmp))
+            self.assertFalse((Path(tmp) / 'pwned').exists())
+
+    def test_lock_packages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'pubspec.lock': PUBSPEC_LOCK})
+            res = pubspec_lock_packages(Path(tmp) / 'pubspec.lock')
+        self.assertEqual(res, [
+            {'name': 'flutter', 'version': '0.0.0', 'source': 'sdk',
+             'dependency': 'direct main'},
+            {'name': 'http', 'version': '1.2.0', 'source': 'hosted',
+             'dependency': 'direct main'},
+            {'name': 'mylib', 'version': '0.1.0', 'source': 'path',
+             'dependency': 'direct main'},
+            {'name': 'path', 'version': '1.9.0-dev.1', 'source': 'hosted',
+             'dependency': 'transitive'}])
+
+    def test_lock_invalid_entries_dropped(self):
+        lock = ('packages:\n'
+                '  "../evil":\n    source: hosted\n    version: "1.0.0"\n'
+                '  ok:\n    source: hosted\n    version: "1.0.0; rm -rf"\n'
+                '  good:\n    source: hosted\n    version: "2.0.0"\n'
+                '    dependency: transitive\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'pubspec.lock': lock})
+            res = pubspec_lock_packages(Path(tmp) / 'pubspec.lock')
+        self.assertEqual([p['name'] for p in res], ['good'])
+
+    def test_lock_limits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'pubspec.lock': PUBSPEC_LOCK})
+            self.assertEqual(pubspec_lock_packages(
+                Path(tmp) / 'pubspec.lock', max_size=10), [])
+            self.assertEqual(
+                pubspec_lock_packages(Path(tmp) / 'missing.lock'), [])
