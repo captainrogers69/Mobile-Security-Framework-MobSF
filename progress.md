@@ -95,11 +95,11 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
 | F30 | Skip `io/flutter/` in code analysis | 🟡 | 2026-10-26 | Upstream PR MobSF#2736 open (1 line in `SKIP_CLASS_PATH`). Flutter APK code hits 76 → 61, non-Flutter sample unchanged |
-| F31 | No secrets/URLs from `libflutter.so` | 🟡 | 2026-10-26 | Built: `get_binary_secrets()` reports only known-format secrets for the engine (`libflutter.so`, `Flutter.framework/Flutter`), Android + iOS paths. Branch `fix/flutter-engine-strings`, queued (`upstream-prs/queue/01`) until an open PR is reviewed. APK secrets 12 → 5, IPA 26 → 21, non-Flutter unchanged |
-| F32 | Drop known Flutter identifiers from secrets | 🟡 | 2026-10-26 | Snapshot hash skipped where it appears as the snapshot header (same branch as F31). Build-path IDs left out (test-environment artifact) |
-| F33 | Ignore fixed plugin constants | 🟡 | 2026-10-26 | In progress: 4 `flutter_secure_storage` base64 constants remain on the APK after F31/F32 |
-| F34 | Native libs analysed twice (`apktool_out/`) | ⬜ | | Affects every app (MobSF's own sample too); confirm cause first |
-| F35 | Swift private symbol hashes reported as secrets | ⬜ | 2026-10-26 | New: 20 of the 21 remaining IPA secrets (e.g. `C7EEC6A640D8…WebKitLibraryPigeon…`) from Swift private discriminators in the WebView plugin; affects any Swift app |
+| F31 | No secrets/URLs from `libflutter.so` | 🟡 | 2026-10-26 | Upstream PR MobSF#2737 open (with F32): engine (`libflutter.so`, `Flutter.framework/Flutter`) reports only known-format secrets, Android + iOS paths. APK secrets 12 → 5, IPA 26 → 21, non-Flutter unchanged |
+| F32 | Drop known Flutter identifiers from secrets | 🟡 | 2026-10-26 | In MobSF#2737: snapshot hash skipped where it appears as the snapshot header. Build-path IDs left out (test-environment artifact) |
+| F33 | Ignore fixed plugin constants | 🟡 | 2026-10-26 | Built, queued (`upstream-prs/queue/02`, branch `fix/flutter-plugin-constants`): exact `flutter_secure_storage` / `shared_preferences` base64 constants skipped (plugin code is R8-minified, so path skips don't work). APK 12 → 8 alone, 12 → 1 with #2737 |
+| F34 | Native libs analysed twice (`apktool_out/`) | 🟡 | 2026-10-26 | Cause: apktool copies `lib/` to `apktool_out/`, `library_analysis()` globs the whole upload dir. Built, queued (`upstream-prs/queue/04`, branch `fix/skip-apktool-copies`): MobSF sample APK 14 → 7 entries, Flutter APK 16 → 8. Same bug fixed in the fork's Flutter walk (PR #15, merged) |
+| F35 | Swift private symbol hashes reported as secrets | 🟡 | 2026-10-26 | Built, queued (`upstream-prs/queue/03`, branch `fix/swift-symbol-secrets`): Swift symbol names skipped before the entropy check. IPA 26 → 6 alone; with #2737 + queue 02: APK 12 → 1, IPA 26 → 1. Conflicts with queue 02 (resolution tested) |
 
 ## Phase 2 — Dart snapshot analysis, Flutter checks, CLI
 
@@ -177,4 +177,5 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | Flutter analysis wired into the fork's MobSF (3a6c48f2, f403035e; PR #10): scans, web/PDF reports, JSON API; Flutter project ZIPs now scannable. E2E verified on isolated instance; full suite 190 tests (2 known local failures) |
 | 2026-10-26 | Maintainer replied on #2722 (small iterative PRs, no third-party binaries, fewer false positives). Measured false positives on a real Flutter APK; added F30–F34. #2722 follow-up posted with small-PR plan. Upstream PR #2734 (Flutter source ZIPs) open |
 | 2026-10-26 | F30 upstream PR #2736 opened; F31/F32 built and queued; F35 added. Upstream PR drafts and logs kept in local `upstream-prs/` (gitignored). Manual upstream sync PR #13 |
+| 2026-10-26 | Upstream PR #2737 opened (F31/F32); 3 upstream PRs open (#2734, #2736, #2737). F33, F34, F35 built and queued. Fork PR #15 merged (Flutter walk skips MobSF output folders) |
 | 2026-10-26 | Done the TODO from MobSF#2724: `docs/environment.md` and `.env.example` now state the single flag rule (only `1` enables; env wins over `config.py`). Added `MOBSF_FLUTTER_OSV_ENABLED` and `docs/flutter.md` (features, CLI, settings, limits) |
