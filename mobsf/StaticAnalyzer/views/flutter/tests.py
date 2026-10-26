@@ -1,5 +1,6 @@
 """Unit tests for Flutter detection."""
 import os
+import plistlib
 import random
 import re
 import tempfile
@@ -23,7 +24,9 @@ from mobsf.StaticAnalyzer.views.flutter.detect import (
 from mobsf.StaticAnalyzer.views.flutter.engine import (
     REV_RE,
     engine_revisions,
+    flutter_engine_info,
     flutter_from_engine,
+    flutter_from_framework_plist,
     load_flutter_engines,
 )
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
@@ -692,3 +695,111 @@ class AdvisoryTests(SimpleTestCase):
             self.assertTrue(adv['url'].startswith(
                 'https://github.com/dart-lang/sdk/security/advisories/'
                 + adv['id']))
+
+
+IOS_FW = 'Payload/Runner.app/Frameworks/Flutter.framework/'
+
+
+def _framework_plist(fmt=plistlib.FMT_XML, **extra):
+    data = {'CFBundleExecutable': 'Flutter', 'BuildMode': 'release',
+            'FlutterEngine': ENGINE_3_44_9}
+    data.update(extra)
+    return plistlib.dumps(data, fmt=fmt)
+
+
+class IOSEngineTests(SimpleTestCase):
+
+    def _plist(self, tmp, data):
+        path = Path(tmp) / 'Info.plist'
+        path.write_bytes(data)
+        return path
+
+    def test_xml_plist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = flutter_from_framework_plist(
+                self._plist(tmp, _framework_plist()))
+        self.assertEqual(res, {'engine': ENGINE_3_44_9,
+                               'flutter': ['3.44.9'],
+                               'build_mode': 'release'})
+
+    def test_binary_plist_profile_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = flutter_from_framework_plist(self._plist(
+                tmp, _framework_plist(plistlib.FMT_BINARY,
+                                      BuildMode='profile')))
+        self.assertEqual(res['build_mode'], 'profile')
+        self.assertEqual(res['flutter'], ['3.44.9'])
+
+    def test_unknown_engine_keeps_build_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = flutter_from_framework_plist(self._plist(
+                tmp, _framework_plist(FlutterEngine=DECOY_REVS[0])))
+        self.assertEqual(res, {'engine': DECOY_REVS[0], 'flutter': [],
+                               'build_mode': 'release'})
+
+    def test_invalid_values_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = flutter_from_framework_plist(self._plist(
+                tmp, _framework_plist(FlutterEngine='../../etc/passwd',
+                                      BuildMode='<script>')))
+        self.assertEqual(res, {'engine': None, 'flutter': [],
+                               'build_mode': None})
+
+    def test_entity_declaration_rejected(self):
+        bomb = (b'<?xml version="1.0"?><!DOCTYPE plist ['
+                b'<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;">]>'
+                b'<plist version="1.0"><dict><key>FlutterEngine</key>'
+                b'<string>&b;</string></dict></plist>')
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(
+                flutter_from_framework_plist(self._plist(tmp, bomb)))
+
+    def test_not_a_dict_or_garbage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(flutter_from_framework_plist(
+                self._plist(tmp, plistlib.dumps(['a']))))
+            self.assertIsNone(flutter_from_framework_plist(
+                self._plist(tmp, b'\x00\xff garbage')))
+
+    def test_oversized_and_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            real = self._plist(tmp, _framework_plist())
+            self.assertIsNone(
+                flutter_from_framework_plist(real, max_size=10))
+            link = Path(tmp) / 'link.plist'
+            try:
+                os.symlink(real, link)
+            except (OSError, NotImplementedError):
+                self.skipTest('symlinks not supported')
+            self.assertIsNone(flutter_from_framework_plist(link))
+
+
+class EngineInfoTests(SimpleTestCase):
+
+    def _app(self, tmp, files):
+        for rel, data in files.items():
+            path = Path(tmp) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+
+    def test_android_engine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._app(tmp, {'lib/arm64-v8a/libflutter.so':
+                            ENGINE_3_44_9.encode() + b'\x00'})
+            res = flutter_engine_info(tmp, 'lib/arm64-v8a/libflutter.so')
+        self.assertEqual(res['flutter'], ['3.44.9'])
+
+    def test_ios_engine_uses_framework_plist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._app(tmp, {IOS_FW + 'Flutter': b'\xcf\xfa\xed\xfe',
+                            IOS_FW + 'Info.plist': _framework_plist()})
+            res = flutter_engine_info(tmp, IOS_FW + 'Flutter')
+        self.assertEqual(res['flutter'], ['3.44.9'])
+        self.assertEqual(res['build_mode'], 'release')
+
+    def test_unsafe_paths_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(flutter_engine_info(
+                tmp, '../lib/arm64-v8a/libflutter.so'))
+            self.assertIsNone(flutter_engine_info(tmp, '/etc/libflutter.so'))
+            self.assertIsNone(flutter_engine_info(tmp, 'lib/libfoo.so'))
