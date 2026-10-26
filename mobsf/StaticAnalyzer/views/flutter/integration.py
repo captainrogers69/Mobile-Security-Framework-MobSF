@@ -14,6 +14,7 @@ from django.conf import settings
 
 from mobsf.MobSF.utils import (
     append_scan_status,
+    is_md5,
     scan_state_file,
 )
 from mobsf.StaticAnalyzer.views.flutter.binary import flutter_binary_analysis
@@ -90,6 +91,8 @@ def _ios_info_plist(app_dir, files):
 
 def scan_binary(checksum, app_dir, platform, parsed_manifest=None):
     """Flutter analysis of an extracted APK/IPA; None on failure."""
+    if not is_md5(checksum):
+        return None
     try:
         files = _rel_files(app_dir)
         info_plist = (_ios_info_plist(app_dir, files)
@@ -108,6 +111,8 @@ def scan_binary(checksum, app_dir, platform, parsed_manifest=None):
 
 def scan_source(checksum, app_dir):
     """Flutter analysis of an extracted project ZIP; None on failure."""
+    if not is_md5(checksum):
+        return None
     try:
         result = flutter_source_analysis(
             app_dir,

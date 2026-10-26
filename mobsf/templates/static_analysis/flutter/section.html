@@ -1,0 +1,117 @@
+{% if flutter and flutter.is_flutter %}
+<a id="flutter" class="anchor"></a>
+<section class="content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-lg-12">
+        <div class="card">
+          <div class="card-body">
+            <p><strong><i class="fas fa-feather-alt"></i> FLUTTER ANALYSIS</strong></p>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <tbody>
+                  {% if flutter.project_root %}
+                  <tr><th>Project</th><td>Flutter project ({{ flutter.packages|length }} locked packages)</td></tr>
+                  <tr><th>Deep linking</th><td>Android: {{ flutter.deep_linking.android|default_if_none:"not set" }} | iOS: {{ flutter.deep_linking.ios|default_if_none:"not set" }}</td></tr>
+                  <tr><th>OSV lookup</th><td>{% if flutter.osv is None %}Disabled (MOBSF_FLUTTER_OSV_ENABLED){% else %}{{ flutter.osv|length }} vulnerable package(s){% endif %}</td></tr>
+                  {% else %}
+                  <tr><th>Build mode</th><td>{{ flutter.build_mode }}</td></tr>
+                  <tr><th>Flutter</th><td>{{ flutter.flutter|join:", "|default:"unknown" }}{% if flutter.engine %} (engine {{ flutter.engine }}){% endif %}</td></tr>
+                  <tr><th>Dart</th><td>{{ flutter.dart|join:", "|default:"unknown" }}{% if flutter.snapshot_hash %} (snapshot {{ flutter.snapshot_hash }}){% endif %}</td></tr>
+                  <tr><th>Obfuscated</th><td>{{ flutter.obfuscated|default_if_none:"unknown" }}</td></tr>
+                  <tr><th>Split debug info</th><td>{{ flutter.split_debug_info|default_if_none:"unknown" }}</td></tr>
+                  {% if flutter.abis %}<tr><th>ABIs</th><td>{{ flutter.abis|join:", " }}</td></tr>{% endif %}
+                  <tr><th>Deep linking</th><td>{{ flutter.deep_linking|default_if_none:"not set" }}</td></tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+
+            <p><strong>FINDINGS</strong></p>
+            <div class="table-responsive">
+              <table id="table_flutter" class="table table-bordered table-hover table-striped">
+                <thead>
+                  <tr><th>NO</th><th>ISSUE</th><th>SEVERITY</th><th>STANDARDS</th><th>PACKAGES</th></tr>
+                </thead>
+                <tbody>
+                  {% for f in flutter.findings %}
+                  <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td><b>{{ f.title }}</b><br/>{{ f.description }}</td>
+                    <td><span class="badge bg-{% if f.severity == 'high' %}danger{% elif f.severity == 'warning' %}warning{% elif f.severity == 'good' %}success{% else %}info{% endif %}">{% if f.severity == 'good' %}secure{% else %}{{ f.severity }}{% endif %}</span></td>
+                    <td>{% if f.cwe %}<b>CWE:</b> {{ f.cwe|upper }}<br/>{% endif %}{% if f.masvs %}<b>MASVS:</b> MSTG-{{ f.masvs|upper }}{% endif %}</td>
+                    <td>{{ f.packages|join:", " }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            {% if flutter.code_analysis %}
+            <p><strong>DART CODE ANALYSIS</strong></p>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>ISSUE</th><th>SEVERITY</th><th>STANDARDS</th><th>FILES</th></tr></thead>
+                <tbody>
+                  {% for rule, details in flutter.code_analysis.items %}
+                  <tr>
+                    <td>{{ details.metadata.description }}</td>
+                    <td><span class="badge bg-{% if details.metadata.severity == 'high' %}danger{% elif details.metadata.severity == 'warning' %}warning{% elif details.metadata.severity == 'good' %}success{% else %}info{% endif %}">{{ details.metadata.severity }}</span></td>
+                    <td>{% if details.metadata.cwe %}<b>CWE:</b> {{ details.metadata.cwe }}<br/>{% endif %}<b>MASVS:</b> {{ details.metadata.masvs }}</td>
+                    <td>{% for file, lines in details.files.items %}{{ file }}: {{ lines }}<br/>{% endfor %}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+
+            {% if flutter.osv %}
+            <p><strong>VULNERABLE PACKAGES (OSV)</strong></p>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>PACKAGE</th><th>VERSION</th><th>ADVISORY</th><th>SEVERITY</th><th>FIXED IN</th></tr></thead>
+                <tbody>
+                  {% for pkg in flutter.osv %}{% for v in pkg.vulns %}
+                  <tr>
+                    <td>{{ pkg.name }}</td><td>{{ pkg.version }}</td>
+                    <td><a href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ v.id }}</a> {{ v.aliases|join:", " }}<br/>{{ v.summary }}</td>
+                    <td>{{ v.severity }}</td><td>{{ v.fixed|join:", " }}</td>
+                  </tr>
+                  {% endfor %}{% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+
+            {% if flutter.asset_secrets or flutter.assets %}
+            <p><strong>SENSITIVE ASSETS</strong></p>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>FILE</th><th>TYPE</th></tr></thead>
+                <tbody>
+                  {% for a in flutter.assets %}<tr><td>{{ a.file }}</td><td>{{ a.type }}</td></tr>{% endfor %}
+                </tbody>
+              </table>
+              {% for s in flutter.asset_secrets %}
+              <p><b>{{ s.file }}</b></p>
+              <ul>{% for secret in s.secrets %}<li><code>{{ secret }}</code></li>{% endfor %}</ul>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            <p><strong>PACKAGES</strong></p>
+            <p>
+              {% if flutter.project_root %}
+                {% for p in flutter.packages %}<span class="badge bg-secondary">{{ p.name }} {{ p.version }}</span> {% endfor %}
+              {% else %}
+                {% for p in flutter.packages %}<span class="badge bg-secondary">{{ p }}</span> {% empty %}None found{% endfor %}
+              {% endif %}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}

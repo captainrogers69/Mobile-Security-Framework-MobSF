@@ -44,7 +44,10 @@ def scan_regex(path, regex, tail=512, max_size=SCAN_MAX_SIZE,
     tail were already judged with their preceding byte.
     """
     matches = []
-    fobj = open_regular(path, max_size)
+    try:
+        fobj = open_regular(path, max_size)
+    except FileNotFoundError:
+        return None
     if fobj is None:
         return None
     with fobj:

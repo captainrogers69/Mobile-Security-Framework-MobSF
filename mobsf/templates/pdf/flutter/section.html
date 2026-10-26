@@ -1,0 +1,35 @@
+{% if flutter and flutter.is_flutter %}
+      <h2><i class="fas fa-feather-alt"></i> FLUTTER ANALYSIS</h2>
+      {% if flutter.project_root %}
+      <h5>Locked packages:</h5> {{ flutter.packages|length }}</br>
+      <h5>OSV lookup:</h5> {% if flutter.osv is None %}disabled{% else %}{{ flutter.osv|length }} vulnerable package(s){% endif %}</br>
+      {% else %}
+      <h5>Build mode:</h5> {{ flutter.build_mode }}</br>
+      <h5>Flutter:</h5> {{ flutter.flutter|join:", "|default:"unknown" }}</br>
+      <h5>Dart:</h5> {{ flutter.dart|join:", "|default:"unknown" }}</br>
+      <h5>Obfuscated:</h5> {{ flutter.obfuscated|default_if_none:"unknown" }}</br>
+      {% endif %}
+      </br>
+      <table class="basic">
+        <thead><tr><th>NO</th><th>ISSUE</th><th>SEVERITY</th><th>STANDARDS</th></tr></thead>
+        <tbody>
+          {% for f in flutter.findings %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td width="50%"><b>{{ f.title }}</b></br>{{ f.description }}</td>
+            <td>{% if f.severity == "high" %}<span class="danger">high</span>{% elif f.severity == "warning" %}<span class="warning">warning</span>{% elif f.severity == "good" %}<span class="success">secure</span>{% else %}<span class="info">info</span>{% endif %}</td>
+            <td>{% if f.cwe %}CWE: {{ f.cwe|upper }}</br>{% endif %}{% if f.masvs %}MASVS: MSTG-{{ f.masvs|upper }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+          {% for rule, details in flutter.code_analysis.items %}
+          <tr>
+            <td>D{{ forloop.counter }}</td>
+            <td width="50%">{{ details.metadata.description }}</br>{% for file, lines in details.files.items %}{{ file }}: {{ lines }}</br>{% endfor %}</td>
+            <td>{% if details.metadata.severity == "high" %}<span class="danger">high</span>{% elif details.metadata.severity == "warning" %}<span class="warning">warning</span>{% elif details.metadata.severity == "good" %}<span class="success">secure</span>{% else %}<span class="info">info</span>{% endif %}</td>
+            <td>{{ details.metadata.cwe }}</br>{{ details.metadata.masvs }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </br></br>
+{% endif %}

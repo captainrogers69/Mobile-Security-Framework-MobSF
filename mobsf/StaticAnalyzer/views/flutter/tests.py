@@ -15,6 +15,7 @@ import requests
 from django.test import SimpleTestCase, override_settings
 
 from mobsf.MobSF.utils import scan_state_file
+from mobsf.StaticAnalyzer.views.android.apk import valid_source_code
 from mobsf.StaticAnalyzer.views.common.binary.elf import ELFChecksec
 from mobsf.StaticAnalyzer.views.flutter.advisories import (
     check_advisories,
@@ -1758,11 +1759,17 @@ class IntegrationTests(SimpleTestCase):
             'mobsf.MobSF.utils.scan_state_root',
             return_value=Path(self.home.name) / 'scan_state')
         self.patch.start()
+        # The fake scan hash has no database row
+        self.status = mock.patch(
+            'mobsf.StaticAnalyzer.views.flutter.integration.'
+            'append_scan_status')
+        self.status.start()
         # Never touch the real MobSF home from tests
         self.assertTrue(str(scan_state_file(TEST_MD5, 'flutter.json'))
                         .startswith(self.home.name))
 
     def tearDown(self):
+        self.status.stop()
         self.patch.stop()
         self.home.cleanup()
 
@@ -1837,5 +1844,77 @@ class IntegrationTests(SimpleTestCase):
         self.assertEqual(res['project_root'], '.')
         self.assertTrue(load_result(TEST_MD5)['is_flutter'])
 
-    def test_errors_do_not_raise(self):
-        self.assertIsNone(scan_binary('not-an-md5', '/nonexistent', 'android'))
+    def test_invalid_hash_returns_none_quietly(self):
+        with self.assertNoLogs('mobsf.StaticAnalyzer.views.flutter',
+                               level='ERROR'):
+            self.assertIsNone(
+                scan_binary('not-an-md5', '/nonexistent', 'android'))
+            self.assertIsNone(scan_source('not-an-md5', '/nonexistent'))
+
+    def test_missing_ios_executable_is_quiet(self):
+        files = {IOS_APP + 'Info.plist': plistlib.dumps(
+            {'CFBundleExecutable': 'Runner'})}
+        with tempfile.TemporaryDirectory() as tmp:
+            self._app(tmp, files)
+            with self.assertNoLogs('mobsf.StaticAnalyzer.views.flutter',
+                                   level='ERROR'):
+                self.assertEqual(flutter_plugins(tmp, list(files)), [])
+
+
+FLUTTER_ZIP_TREE = {
+    'pubspec.yaml': PUBSPEC,
+    '.gitignore': 'flutter-ignore\n',
+    'lib/main.dart': 'void main() {}',
+    'android/.gitignore': 'android-ignore\n',
+    'android/build.gradle.kts': '',
+    'android/app/src/main/AndroidManifest.xml': MANIFEST.format(meta=''),
+    'android/app/src/main/kotlin/com/example/MainActivity.kt': '',
+    'ios/Runner/Info.plist': '',
+}
+
+
+class FlutterZipSourceTypeTests(SimpleTestCase):
+    """MobSF's source check must accept Flutter project ZIPs."""
+
+    def _tree(self, base, files):
+        for rel, data in files.items():
+            path = Path(base) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(data)
+
+    def _check(self, app_dir):
+        with mock.patch(
+                'mobsf.StaticAnalyzer.views.android.apk.append_scan_status'):
+            return valid_source_code(TEST_MD5, app_dir)
+
+    def test_project_at_zip_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, FLUTTER_ZIP_TREE)
+            self.assertEqual(self._check(tmp), ('studio', True))
+            root = Path(tmp)
+            self.assertTrue(
+                (root / 'app/src/main/AndroidManifest.xml').is_file())
+            # Existing project files are kept, not overwritten
+            self.assertEqual((root / '.gitignore').read_text(),
+                             'flutter-ignore\n')
+            self.assertTrue((root / 'lib/main.dart').is_file())
+            self.assertFalse((root / 'android').exists())
+
+    def test_project_wrapped_in_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(Path(tmp) / 'demo', FLUTTER_ZIP_TREE)
+            self.assertEqual(self._check(tmp), ('studio', True))
+            self.assertTrue(
+                (Path(tmp) / 'app/src/main/AndroidManifest.xml').is_file())
+
+    def test_flutter_project_without_android_shell(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {'pubspec.yaml': PUBSPEC, 'lib/main.dart': ''})
+            self.assertEqual(self._check(tmp), ('', False))
+
+    def test_plain_android_project_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(tmp, {
+                'app/src/main/AndroidManifest.xml': MANIFEST.format(meta=''),
+                'app/src/main/java/A.java': ''})
+            self.assertEqual(self._check(tmp), ('studio', True))

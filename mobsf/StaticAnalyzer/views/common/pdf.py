@@ -36,6 +36,9 @@ from mobsf.StaticAnalyzer.views.android.db_interaction import (
     get_context_from_db_entry as adb)
 from mobsf.StaticAnalyzer.views.ios.db_interaction import (
     get_context_from_db_entry as idb)
+from mobsf.StaticAnalyzer.views.flutter.integration import (
+    load_result as flutter_result,
+)
 from mobsf.StaticAnalyzer.views.windows.db_interaction import (
     get_context_from_db_entry as wdb)
 from mobsf.MobSF.views.authentication import (
@@ -168,6 +171,7 @@ def handle_pdf_android(static_db):
     context['average_cvss'] = get_avg_cvss(
         context['code_analysis'])
     context['appsec'] = get_android_dashboard(static_db)
+    context['flutter'] = flutter_result(context['md5'])
     if context['file_name'].lower().endswith('.zip'):
         logger.info('Generating PDF report for android zip')
     else:
@@ -180,6 +184,7 @@ def handle_pdf_ios(static_db):
                 'PDF Report Generation (IOS)')
     context = idb(static_db)
     context['appsec'] = get_ios_dashboard(static_db)
+    context['flutter'] = flutter_result(context['md5'])
     if context['file_name'].lower().endswith('.zip'):
         logger.info('Generating PDF report for IOS zip')
         context['average_cvss'] = get_avg_cvss(
