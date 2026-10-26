@@ -29,6 +29,11 @@ from mobsf.StaticAnalyzer.views.flutter.engine import (
     flutter_from_framework_plist,
     load_flutter_engines,
 )
+from mobsf.StaticAnalyzer.views.flutter.obfuscation import (
+    obfuscation_info,
+    package_uris,
+    split_debug_info,
+)
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
 )
@@ -803,3 +808,94 @@ class EngineInfoTests(SimpleTestCase):
                 tmp, '../lib/arm64-v8a/libflutter.so'))
             self.assertIsNone(flutter_engine_info(tmp, '/etc/libflutter.so'))
             self.assertIsNone(flutter_engine_info(tmp, 'lib/libfoo.so'))
+
+
+DWARF = ['product', 'dwarf_stack_traces_mode', 'arm64', 'android']
+NO_DWARF = ['product', 'no-dwarf_stack_traces_mode', 'arm64', 'android']
+
+
+def _uris(count, pkgs=('flutter', 'http')):
+    return [f'package:{pkgs[i % len(pkgs)]}/src/file_{i}.dart'
+            for i in range(count)]
+
+
+class ObfuscationTests(SimpleTestCase):
+
+    def _bin(self, tmp, uris):
+        path = Path(tmp) / 'libapp.so'
+        path.write_bytes(b'\x00\x7fELF' + b''.join(
+            b'\x02\x00' + u.encode() + b'\x00\x13' for u in uris))
+        return path
+
+    def test_split_debug_info_from_features(self):
+        self.assertTrue(split_debug_info(DWARF))
+        self.assertFalse(split_debug_info(NO_DWARF))
+        self.assertIsNone(split_debug_info([]))
+        self.assertIsNone(split_debug_info(None))
+
+    def test_not_obfuscated_lists_packages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = obfuscation_info(self._bin(tmp, _uris(300)), DWARF)
+        self.assertEqual(res, {'split_debug_info': True,
+                               'obfuscated': False,
+                               'package_uris': 300,
+                               'packages': ['flutter', 'http']})
+
+    def test_obfuscated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = obfuscation_info(self._bin(tmp, _uris(3)), DWARF)
+        self.assertTrue(res['obfuscated'])
+        self.assertEqual(res['package_uris'], 3)
+
+    def test_no_dwarf_means_not_obfuscated(self):
+        # Flutter only allows --obfuscate with --split-debug-info
+        with tempfile.TemporaryDirectory() as tmp:
+            res = obfuscation_info(self._bin(tmp, _uris(3)), NO_DWARF)
+        self.assertFalse(res['split_debug_info'])
+        self.assertFalse(res['obfuscated'])
+
+    def test_unreadable_binary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            real = self._bin(tmp, _uris(300))
+            link = Path(tmp) / 'link.so'
+            try:
+                os.symlink(real, link)
+            except (OSError, NotImplementedError):
+                self.skipTest('symlinks not supported')
+            res = obfuscation_info(link, DWARF)
+        self.assertEqual(res, {'split_debug_info': True,
+                               'obfuscated': None,
+                               'package_uris': 0,
+                               'packages': []})
+
+    def test_uri_cap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            uris = package_uris(self._bin(tmp, _uris(50)), max_uris=10)
+        self.assertEqual(len(uris), 10)
+
+    def test_non_uri_text_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'libapp.so'
+            path.write_bytes(b'\x00package:Bad Name/x.dart\x00'
+                             b'package:ok/no_extension\x00'
+                             b'package:ok/../../etc/passwd\x00'
+                             b'package:good/src/a.dart\x00')
+            self.assertEqual(package_uris(path),
+                             {'package:good/src/a.dart'})
+
+    def test_chunked_scan_matches_whole_file(self):
+        rng = random.Random(11)
+        with tempfile.TemporaryDirectory() as tmp:
+            for _ in range(60):
+                parts = []
+                for _ in range(rng.randint(0, 12)):
+                    parts.append(bytes(rng.choice(b'abc/._\x00 ')
+                                       for _ in range(rng.randint(0, 30))))
+                    parts.append(rng.choice(_uris(40)).encode())
+                data = b''.join(parts)
+                path = Path(tmp) / 'libapp.so'
+                path.write_bytes(data)
+                want = package_uris(path, chunk_size=len(data) + 1)
+                for size in (64, 101, 333):
+                    self.assertEqual(
+                        package_uris(path, chunk_size=size), want)
