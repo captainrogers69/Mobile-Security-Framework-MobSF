@@ -2450,13 +2450,24 @@ class ChannelTemplateTests(SimpleTestCase):
                                   'severity': 'high',
                                   'description': 'Allowed'}],
                 'url_schemes': ['demo<app>'],
+                'api': {'api_keychain_access': {
+                    'files': {'Runner/<k>.swift': '3'},
+                    'metadata': {'description': 'Keychain <api>'}}},
+                'urls': [{'urls': ['https://x.example/<u>'],
+                          'path': 'Runner/Net.swift'}],
+                'emails': [{'emails': ['<e>@example.com'],
+                            'path': 'Runner/Net.swift'}],
+                'secrets': ['GitHub token: <s>'],
             }}
         web = render_to_string(
             'static_analysis/flutter/section.html', {'flutter': flutter})
         self.assertIn('IOS APP (ios/)', web)
         for text in ('Runner/&lt;a&gt;.swift', 'No protection &lt;x&gt;',
                      '&lt;img src=x&gt;', 'Arbitrary loads &lt;y&gt;',
-                     'demo&lt;app&gt;', 'NSCameraUsageDescription'):
+                     'demo&lt;app&gt;', 'NSCameraUsageDescription',
+                     'Keychain &lt;api&gt;', 'ios/Runner/&lt;k&gt;.swift',
+                     'https://x.example/&lt;u&gt;', '&lt;e&gt;@example.com',
+                     'GitHub token: &lt;s&gt;'):
             self.assertIn(text, web)
         self.assertNotIn('<img src=x>', web)
         pdf = render_to_string(
@@ -2464,6 +2475,7 @@ class ChannelTemplateTests(SimpleTestCase):
         self.assertIn('iOS app (ios/)', pdf)
         self.assertIn('Arbitrary loads &lt;y&gt;', pdf)
         self.assertIn('No protection &lt;x&gt;', pdf)
+        self.assertIn('GitHub token: &lt;s&gt;', pdf)
 
 
 IOS_PLIST = plistlib.dumps({
@@ -2522,6 +2534,35 @@ class IOSShellTests(SimpleTestCase):
         self.assertTrue(all(f['severity'] in ('high', 'warning')
                             for f in found))
         self.assertEqual(ios_shell_findings(None), [])
+
+    def test_same_checks_as_mobsf_ios_zip(self):
+        token = b'ghp_' + b'a1B2c3D4e5' * 3 + b'f6G7h8'
+        net = (b'let u = URL(string: "https://api.example.com/v1")!\n'
+               b'let session = URLSession.shared\n'
+               b'let mail = "dev@example.com"\n'
+               b'let token = "' + token + b'"\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            self._project(tmp)
+            self._tree(tmp, {
+                'ios/Runner/Net.swift': net,
+                'ios/Runner/Config.plist': plistlib.dumps(
+                    {'API_KEY': 'k3y4pp1234'}),
+                # Not the app developer's code
+                'ios/Pods/Lib/Net.swift': net.replace(
+                    b'api.example.com', b'pods.example.com'),
+            })
+            res = ios_shell_analysis(None, tmp)
+        self.assertEqual(list(res['api']['api_network_calls']['files']),
+                         ['Runner/Net.swift'])
+        urls = [u for item in res['urls'] for u in item['urls']]
+        self.assertIn('https://api.example.com/v1', urls)
+        self.assertFalse(any('pods.example.com' in u for u in urls))
+        self.assertEqual([item['path'] for item in res['urls']],
+                         ['Runner/Net.swift'])
+        emails = [e for item in res['emails'] for e in item['emails']]
+        self.assertEqual(emails, ['dev@example.com'])
+        self.assertIn(f'GitHub token: {token.decode()}', res['secrets'])
+        self.assertIn('API_KEY : k3y4pp1234', res['secrets'])
 
     def test_no_ios_dir(self):
         with tempfile.TemporaryDirectory() as tmp:

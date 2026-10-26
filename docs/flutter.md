@@ -28,10 +28,13 @@ Plan and status: [`requirements.md`](../requirements.md), [`progress.md`](../pro
 - Deep linking flags, declared assets and their secrets
 - Platform channels named in `MethodChannel`, `EventChannel`, `BasicMessageChannel`
   calls, with files and the native handler files in `android/` and `ios/`
-- iOS app (`ios/`): MobSF's Swift/Objective-C rules on the app's own code (CocoaPods,
-  plugin sources and generated files skipped) and `ios/Runner/Info.plist` (permissions,
-  App Transport Security, URL schemes). High and warning items are also Flutter findings
-  (`flutter_ios_*`). `android/` gets MobSF's normal Android source analysis
+- iOS app (`ios/`): MobSF's offline iOS project-ZIP checks on the app's own code
+  (CocoaPods, plugin sources and generated files skipped): Swift/Objective-C rules,
+  iOS API rules, URLs and emails, hardcoded secrets (code strings and plists), and
+  `ios/Runner/Info.plist` (permissions, App Transport Security, URL schemes). High and
+  warning items are also Flutter findings (`flutter_ios_*`). MobSF's network checks
+  (domain malware check, App Store lookup) are not repeated. `android/` gets MobSF's
+  normal Android source analysis
 - Optional: known vulnerabilities of locked packages from OSV (see below)
 
 ## Where it shows

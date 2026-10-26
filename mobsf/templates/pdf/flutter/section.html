@@ -65,6 +65,8 @@
         </tbody>
       </table>
       {% if flutter.ios_shell.url_schemes %}<h5>URL schemes:</h5> {{ flutter.ios_shell.url_schemes|join:", " }}</br>{% endif %}
+      {% if flutter.ios_shell.api %}<h5>iOS APIs:</h5> {% for rule, details in flutter.ios_shell.api.items %}{{ details.metadata.description }}{% if not forloop.last %}, {% endif %}{% endfor %}</br>{% endif %}
+      {% if flutter.ios_shell.secrets %}<h5>Possible hardcoded secrets:</h5> {% for secret in flutter.ios_shell.secrets %}{{ secret }}</br>{% endfor %}{% endif %}
       {% endif %}
       </br></br>
 {% endif %}
