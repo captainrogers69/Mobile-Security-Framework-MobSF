@@ -149,7 +149,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | N2 | Parser build cache + graceful failure | ⬜ | | |
 | N3 | ≤ 2 min added per 50 MB APK | ⬜ | | |
 | N4 | Tools baked into Docker image | ⬜ | | |
-| N5 | Test corpus ≥ 10 Flutter apps in CI | 🟡 | 2026-10-26 | 8 builds of 3 ordinary apps (template, plugins, http; Flutter 3.44.9; Android release/debug/obfuscated, iOS release). `scripts/flutter_corpus/build.sh` + `scripts/flutter_corpus_check.py` with expected results; 8/8 match. No warning/high false positives on clean apps. To do: more Flutter versions, run in CI once Actions is back |
+| N5 | Test corpus ≥ 10 Flutter apps in CI | 🟡 | 2026-10-26 | 32 apps: 8 builds of 3 ordinary apps (template, plugins, http; Android release/debug/obfuscated, iOS release) with Flutter 3.44.9, 3.27.4, 3.10.6, 3.0.5 (Dart 3.12 to 2.17). `scripts/flutter_corpus/build.sh`, `fetch_sdk.sh`, `scripts/flutter_corpus_check.py` with expected results; 32/32 match. Found and fixed a false positive: JS channel reported for every webview_flutter 3.x app. To do: run in CI once Actions is back |
 | N6 | `tox -e lint` clean + unit tests | ⬜ | | |
 
 ---
@@ -180,3 +180,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | Upstream PR #2737 opened (F31/F32); 3 upstream PRs open (#2734, #2736, #2737). F33, F34, F35 built and queued. Fork PR #15 merged (Flutter walk skips MobSF output folders) |
 | 2026-10-26 | Done the TODO from MobSF#2724: `docs/environment.md` and `.env.example` now state the single flag rule (only `1` enables; env wins over `config.py`). Added `MOBSF_FLUTTER_OSV_ENABLED` and `docs/flutter.md` (features, CLI, settings, limits) |
 | 2026-10-26 | N5 started: Flutter corpus regression check (8 apps). CLI no longer logs scan-database errors |
+| 2026-10-26 | N5: corpus with 4 Flutter versions (32 apps). JS channel check no longer flags every webview_flutter 2.x/3.x app |

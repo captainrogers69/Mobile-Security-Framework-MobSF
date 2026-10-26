@@ -78,5 +78,7 @@ python scripts/update_flutter_dart_versions.py --all    # rebuild
 - Dart versions before 2.14 (Flutter before 2.5) are not in the version table.
 - Obfuscated apps keep no Dart names: the package list then comes only from native
   plugin registration, and checks based on Dart names (e.g. JS channels) can't run.
+- WebView JavaScript channels can't be detected in apps using `webview_flutter`
+  2.x/3.x: the plugin always contains the method name, used or not.
 - For Flutter project ZIPs, only the Android app in `android/` goes through MobSF's
   Android source analysis; the iOS app in `ios/` is not analysed yet.

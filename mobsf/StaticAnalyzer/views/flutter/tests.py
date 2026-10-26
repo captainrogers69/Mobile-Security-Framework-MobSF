@@ -1191,6 +1191,22 @@ class JSChannelTests(SimpleTestCase):
                 self._bin(tmp, b'\x00addJavaScriptChannelX\x00'
                                b'xaddJavaScriptChannel\x00setJavaScriptMode')))
 
+    def test_pigeon_channel_name_ignored(self):
+        # webview_flutter 2.x/3.x platform channel names are string
+        # literals, kept even in obfuscated apps that use no JS channel
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(uses_js_channels(self._bin(
+                tmp, b'\x00dev.flutter.pigeon.WebViewHostApi.'
+                     b'addJavaScriptChannel\x00')))
+
+    def test_webview_3x_unknown(self):
+        # webview_flutter 3.x always compiles in its own
+        # addJavaScriptChannel, so the name does not show app usage
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(uses_js_channels(self._bin(
+                tmp, b'\x00\x01addJavaScriptChannel\x00'
+                     b'\x00JavascriptChannelRegistry\x00')))
+
     def test_unreadable(self):
         self.assertIsNone(uses_js_channels('/nonexistent/libapp.so'))
 

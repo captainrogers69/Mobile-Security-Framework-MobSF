@@ -1,0 +1,55 @@
+{
+ "is_flutter": true,
+ "platform": "android",
+ "build_mode": "release",
+ "abis": [
+  "arm64-v8a",
+  "armeabi-v7a",
+  "x86_64"
+ ],
+ "flutter": [
+  "3.10.6"
+ ],
+ "dart": [
+  "3.0.3",
+  "3.0.4",
+  "3.0.5",
+  "3.0.6",
+  "3.0.7"
+ ],
+ "obfuscated": false,
+ "split_debug_info": false,
+ "packages": [
+  "collection",
+  "ffi",
+  "file",
+  "flutter",
+  "flutter_secure_storage",
+  "path",
+  "path_provider",
+  "plugins",
+  "shared_preferences",
+  "vector_math",
+  "webview_flutter",
+  "win32",
+  "xdg_directories"
+ ],
+ "plugins": [
+  "flutter_secure_storage",
+  "shared_preferences_android",
+  "webview_flutter_android"
+ ],
+ "deep_linking": null,
+ "js_channels": false,
+ "assets": [],
+ "asset_secret_files": [],
+ "findings": [
+  "good:flutter_secure_storage",
+  "high:flutter_advisory_GHSA-frr6-h895-5pxp",
+  "info:flutter_insecure_storage",
+  "info:flutter_no_root_detection",
+  "info:flutter_no_ssl_pinning",
+  "info:flutter_not_obfuscated",
+  "info:flutter_webview"
+ ]
+}
