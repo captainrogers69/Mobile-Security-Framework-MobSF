@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Regenerate mobsf/StaticAnalyzer/views/flutter/dart_versions.json.
+"""Regenerate the Flutter version tables in mobsf/StaticAnalyzer/views/flutter.
 
-For every stable Dart SDK in the official archive, download it (sha256
-verified), compile an AOT snapshot of a hello world program and read the
-snapshot hash from its header. Flutter versions come from Flutter's
-official releases JSON (dart_sdk_version).
+dart_versions.json: for every stable Dart SDK in the official archive,
+download it (sha256 verified), compile an AOT snapshot of a hello world
+program and read the snapshot hash from its header. Flutter versions come
+from Flutter's official releases JSON (dart_sdk_version).
+
+flutter_engines.json: engine revision (bin/internal/engine.version at each
+stable Flutter tag) -> Flutter versions. libflutter.so embeds the revision.
 
 Usage (from the repository root):
     python scripts/update_flutter_dart_versions.py          # new versions
@@ -38,6 +41,10 @@ from mobsf.StaticAnalyzer.views.flutter.snapshot import (  # noqa: E402
 )
 
 DATA_FILE = ROOT / 'mobsf/StaticAnalyzer/views/flutter/dart_versions.json'
+ENGINE_FILE = ROOT / 'mobsf/StaticAnalyzer/views/flutter/flutter_engines.json'
+ENGINE_VERSION = ('https://raw.githubusercontent.com/flutter/flutter/'
+                  '{}/bin/internal/engine.version')
+REV_RE = re.compile(r'^[0-9a-f]{40}$')
 ARCHIVE = 'https://storage.googleapis.com/dart-archive'
 LISTING = ('https://storage.googleapis.com/storage/v1/b/dart-archive/o'
            '?prefix=channels/stable/release/&delimiter=/&maxResults=1000')
@@ -154,6 +161,29 @@ def build_table(dart_hashes, flutter_map):
         for snap, e in table.items()}
 
 
+def engine_table(flutter_versions, existing):
+    """Map engine revision -> sorted Flutter versions."""
+    rev_by_flutter = {
+        flutter: rev for rev, versions in existing.items()
+        for flutter in versions}
+    for flutter in sorted(flutter_versions, key=vkey):
+        if flutter in rev_by_flutter:
+            continue
+        try:
+            resp = requests.get(ENGINE_VERSION.format(flutter), timeout=TIMEOUT)
+        except requests.RequestException as exp:
+            print(f'Flutter {flutter}: engine.version failed ({exp})')
+            continue
+        rev = resp.text.strip() if resp.ok else ''
+        if REV_RE.match(rev):
+            rev_by_flutter[flutter] = rev
+            print(f'Flutter {flutter}: engine {rev}')
+    table = {}
+    for flutter in sorted(rev_by_flutter, key=vkey):
+        table.setdefault(rev_by_flutter[flutter], []).append(flutter)
+    return table
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--all', action='store_true',
@@ -163,6 +193,7 @@ def main():
     parser.add_argument('--versions', nargs='*',
                         help='only these Dart versions')
     parser.add_argument('--output', default=str(DATA_FILE))
+    parser.add_argument('--engines-output', default=str(ENGINE_FILE))
     args = parser.parse_args()
 
     out = Path(args.output)
@@ -181,9 +212,19 @@ def main():
         if snap and HASH_RE.match(snap):
             dart_hashes[version] = snap
             print(f'{version}: {snap}')
-    table = build_table(dart_hashes, flutter_by_dart())
+    flutter_map = flutter_by_dart()
+    table = build_table(dart_hashes, flutter_map)
     out.write_text(json.dumps(table, indent=1) + '\n')
     print(f'Wrote {len(table)} hashes to {out}')
+
+    engines_out = Path(args.engines_output)
+    existing = {}
+    if not args.all and engines_out.exists():
+        existing = json.loads(engines_out.read_text())
+    flutter_versions = set().union(*flutter_map.values())
+    engines = engine_table(flutter_versions, existing)
+    engines_out.write_text(json.dumps(engines, indent=1) + '\n')
+    print(f'Wrote {len(engines)} engine revisions to {engines_out}')
 
 
 if __name__ == '__main__':

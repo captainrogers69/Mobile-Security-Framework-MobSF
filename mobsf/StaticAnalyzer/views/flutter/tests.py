@@ -1,5 +1,6 @@
 """Unit tests for Flutter detection."""
 import os
+import random
 import re
 import tempfile
 from pathlib import Path
@@ -14,6 +15,12 @@ from mobsf.StaticAnalyzer.views.flutter.assets import (
 from mobsf.StaticAnalyzer.views.flutter.detect import (
     detect_flutter,
     flutter_from_dir,
+)
+from mobsf.StaticAnalyzer.views.flutter.engine import (
+    REV_RE,
+    engine_revisions,
+    flutter_from_engine,
+    load_flutter_engines,
 )
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
@@ -534,3 +541,92 @@ class ELFDartStringsTests(SimpleTestCase):
             strings = chk.strings()
         self.assertTrue(
             any('https://dart-only.example/api' in s for s in strings))
+
+
+# Engine revision of Flutter 3.44.9 (bin/internal/engine.version)
+ENGINE_3_44_9 = '5a2a6a42cce67f965cf540fcecf616faca624aa1'
+# Other 40-hex strings seen in a real libflutter.so
+DECOY_REVS = ('80743bd43fd5b38fedc503308e7a652e23d3ec93', '8' * 40)
+
+
+class FlutterEngineTests(SimpleTestCase):
+
+    def _write(self, tmp, data):
+        path = Path(tmp) / 'libflutter.so'
+        path.write_bytes(data)
+        return path
+
+    def test_revisions_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(
+                tmp, b'\x00\x01' + ENGINE_3_44_9.encode() + b'\x00junk\x00'
+                + DECOY_REVS[0].encode() + b'\x00')
+            revs = engine_revisions(path)
+        self.assertEqual(revs, {ENGINE_3_44_9, DECOY_REVS[0]})
+
+    def test_longer_hex_runs_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, b'\x00' + b'a' * 41 + b'\x00'
+                               + b'x' + ENGINE_3_44_9.encode() + b'\x00')
+            self.assertEqual(engine_revisions(path), set())
+
+    def test_revision_across_chunk_boundary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(
+                tmp, b'\x00' * 990 + ENGINE_3_44_9.encode() + b'\x00')
+            revs = engine_revisions(path, chunk_size=1000)
+        self.assertEqual(revs, {ENGINE_3_44_9})
+
+    def test_chunked_scan_matches_whole_file(self):
+        rng = random.Random(7)
+        alphabet = b'0123456789abcdefxyz\x00 '
+        hexdigits = b'0123456789abcdef'
+        with tempfile.TemporaryDirectory() as tmp:
+            for _ in range(100):
+                data = bytes(rng.choice(alphabet)
+                             for _ in range(rng.randint(0, 300)))
+                pos = rng.randint(0, len(data))
+                run = bytes(rng.choice(hexdigits)
+                            for _ in range(rng.choice((39, 40, 41))))
+                data = data[:pos] + run + data[pos:]
+                path = self._write(tmp, data)
+                want = {m.group().decode() for m in REV_RE.finditer(data)}
+                for size in (41, 42, 97, 1000):
+                    self.assertEqual(
+                        engine_revisions(path, chunk_size=size), want)
+
+    def test_flutter_version_from_engine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = b'\x00'.join(
+                r.encode() for r in (*DECOY_REVS, ENGINE_3_44_9)) + b'\x00'
+            res = flutter_from_engine(self._write(tmp, data))
+        self.assertEqual(res, {'engine': ENGINE_3_44_9, 'flutter': ['3.44.9']})
+
+    def test_unknown_engine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, DECOY_REVS[0].encode() + b'\x00')
+            self.assertIsNone(flutter_from_engine(path))
+
+    def test_symlink_and_size_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            real = self._write(tmp, ENGINE_3_44_9.encode() + b'\x00')
+            self.assertEqual(engine_revisions(real, max_size=10), set())
+            link = Path(tmp) / 'link.so'
+            try:
+                os.symlink(real, link)
+            except (OSError, NotImplementedError):
+                self.skipTest('symlinks not supported')
+            self.assertEqual(engine_revisions(link), set())
+
+    def test_engine_table_integrity(self):
+        seen = set()
+        table = load_flutter_engines()
+        self.assertGreater(len(table), 100)
+        for rev, versions in table.items():
+            self.assertRegex(rev, r'^[0-9a-f]{40}$')
+            self.assertTrue(versions)
+            for ver in versions:
+                self.assertRegex(ver, r'^\d+\.\d+\.\d+$')
+            # A Flutter release has exactly one engine revision
+            self.assertFalse(seen & set(versions))
+            seen |= set(versions)
