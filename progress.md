@@ -14,9 +14,9 @@ date and notes as work lands. Last updated: 2026-10-25
 | Phase 0 — Git setup | 8 | 8 | ✅ |
 | Phase 0 — Services & credentials | 1 | 3 | 🟡 |
 | Upstream contribution | 3 | 6 | 🟡 |
-| Phase 1 — Detection & strings | 7 | 9 | 🟡 |
+| Phase 1 — Detection & strings | 9 | 9 | ✅ |
 | Phase 2 — Snapshot, checks, CLI | 5 | 11 | 🟡 |
-| Phase 3 — Source ZIP | 1 | 4 | 🟡 |
+| Phase 3 — Source ZIP | 2 | 4 | 🟡 |
 | Phase 4 — Dynamic (Android) | 0 | 4 | ⬜ |
 | Phase 5 — Diff, iOS, hardening | 0 | 1 | ⬜ |
 | Non-functional | 0 | 6 | ⬜ |
@@ -84,8 +84,8 @@ date and notes as work lands. Last updated: 2026-10-25
 | F5 | Every `libapp.so` across ABIs and splits | ✅ | 2026-10-26 | All ABIs + `split_apks/*` in `detect.py`; real APK shows 3 ABIs |
 | F6 | String extraction → secrets, URLs, configs | ✅ | 2026-10-26 | `ELFChecksec.strings()` missed all Dart strings in `libapp.so` (lief returns C strings only). Fixed upstream in MobSF#2730 (merged): strings 27 → 12342, hardcoded secrets/URLs now go through MobSF's existing secret/URL/Firebase checks; `libflutter.so` unchanged. iOS already used `strings_on_binary()` |
 | F9 | `flutter_assets/` audit | ✅ | 2026-10-26 | `flutter/assets.py`: flags `.env`, Firebase configs, keys, DBs, named configs; scans text assets for secrets with MobSF's `is_secret_key` + `detect_known_secrets`. Verified on real APK with bundled `.env` |
-| F26 | Flutter section in HTML/PDF/JSON report | ⬜ | | Data ready: `flutter_binary_analysis()` / `flutter_source_analysis()` return one result each with sorted findings. Waits on #2722 layout answer |
-| F27 | REST API parity | ⬜ | | |
+| F26 | Flutter section in HTML/PDF/JSON report | ✅ | 2026-10-26 | Fork: `feat/flutter-integration` (PR #10). Nav entry + section in Android binary/source and iOS binary reports, PDF section, JSON report API. Result stored as `scan_state/<md5>/flutter.json` (no DB change). Upstream layout still to agree in #2722 |
+| F27 | REST API parity | ✅ | 2026-10-26 | `/api/v1/scan` and `/api/v1/report_json` return `flutter`; verified end to end on an isolated instance |
 
 ## Phase 2 — Dart snapshot analysis, Flutter checks, CLI
 
@@ -107,8 +107,8 @@ date and notes as work lands. Last updated: 2026-10-25
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F18 | Accept Flutter project ZIP | 🟡 | 2026-10-26 | `is_flutter_source()` + entry point `flutter_source_analysis()`. MobSF routing not changed yet (today it moves `android/` to root and analyses only the Android shell); waits on #2722 |
-| F19 | `pubspec.lock` OSV audit | 🟡 | 2026-10-26 | `pubspec_lock_packages()` + `osv_vulnerabilities()` (verified live: http 0.12.0 → CVE-2020-35669). Sends dependency names to osv.dev → needs a setting (opt-in proposed) when wired ❓ |
+| F18 | Accept Flutter project ZIP | ✅ | 2026-10-26 | Fixed MobSF bug: Flutter ZIPs could not be scanned (root: `.gitignore` collision on move; wrapped: rejected). `move_flutter_android()` + `scan_source()` before the source check. Upstream PR candidate |
+| F19 | `pubspec.lock` OSV audit | ✅ | 2026-10-26 | Wired behind `MOBSF_FLUTTER_OSV_ENABLED` (default `0`, opt-in: sends dependency names to osv.dev) |
 | F20 | Dart SAST rules | ✅ | 2026-10-26 | `rules/dart_rules.yaml`, 13 rules via MobSF `SastEngine`; positive+negative fixtures; Flutter framework lib (694 files): no high false positives |
 | F21 | Native shell via existing MobSF rules | 🟡 | 2026-10-26 | Works today through MobSF's relaxed Android source check on `android/`; iOS shell not analysed for Flutter ZIPs |
 
@@ -160,3 +160,4 @@ date and notes as work lands. Last updated: 2026-10-25
 | 2026-10-26 | F3 completed (engine version Android + iOS, Dart advisories), F4 obfuscation/split-debug-info. Phase 1 analysis logic done (F1–F6, F9); report wiring (F26/F27) waits on MobSF#2722. Next: post #2722 follow-up (2026-10-27) |
 | 2026-10-26 | Plugin inventory from native code (1222a62d) and package-based checks F10/F11/F13/F14 (5199cb48); identical findings on Android, obfuscated Android and iOS builds. 103 Flutter tests |
 | 2026-10-26 | Binary deep-link + JS channel checks (b9e6b32b); source ZIP pieces: project detection + pubspec.lock (1d3fe39f), OSV (99bfed64), Dart rules (69393baf); entry points `flutter_binary_analysis` (ea141720) and `flutter_source_analysis` (cd493508). 142 Flutter tests, full suite 177 (same 2 local integration failures) |
+| 2026-10-26 | Flutter analysis wired into the fork's MobSF (3a6c48f2, f403035e; PR #10): scans, web/PDF reports, JSON API; Flutter project ZIPs now scannable. E2E verified on isolated instance; full suite 190 tests (2 known local failures) |
