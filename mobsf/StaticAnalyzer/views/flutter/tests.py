@@ -1,4 +1,5 @@
 """Unit tests for Flutter detection."""
+import json
 import os
 import plistlib
 import random
@@ -7,6 +8,8 @@ import tempfile
 from pathlib import Path
 
 from defusedxml.minidom import parseString
+
+import requests
 
 from django.test import SimpleTestCase
 
@@ -45,6 +48,7 @@ from mobsf.StaticAnalyzer.views.flutter.obfuscation import (
     package_uris,
     split_debug_info,
 )
+from mobsf.StaticAnalyzer.views.flutter.osv import osv_vulnerabilities
 from mobsf.StaticAnalyzer.views.flutter.plugins import (
     base_package,
     flutter_plugins,
@@ -1281,3 +1285,106 @@ class FlutterSourceTests(SimpleTestCase):
                 Path(tmp) / 'pubspec.lock', max_size=10), [])
             self.assertEqual(
                 pubspec_lock_packages(Path(tmp) / 'missing.lock'), [])
+
+
+HTTP_GHSA = 'GHSA-4rgh-jx4f-qfcq'
+OSV_HTTP_VULN = {
+    'id': HTTP_GHSA,
+    'summary': 'http before 0.13.3 vulnerable to header injection',
+    'aliases': ['CVE-2020-35669'],
+    'database_specific': {'severity': 'MODERATE', 'cwe_ids': ['CWE-74']},
+    'affected': [{'package': {'name': 'http', 'ecosystem': 'Pub'},
+                  'ranges': [{'type': 'ECOSYSTEM', 'events': [
+                      {'introduced': '0'}, {'fixed': '0.13.3'}]}]}],
+}
+
+
+class _FakeResponse:
+
+    def __init__(self, data, status=200):
+        self.status_code = status
+        self._data = json.dumps(data).encode()
+
+    def iter_content(self, chunk_size):
+        yield self._data
+
+    def close(self):
+        pass
+
+
+class _FakeSession:
+
+    def __init__(self, batch, vulns, fail=False):
+        self.batch, self.vulns, self.fail = batch, vulns, fail
+        self.queries, self.fetched = [], []
+
+    def post(self, url, json=None, **kwargs):
+        if self.fail:
+            raise requests.ConnectionError('offline')
+        self.queries.extend(json['queries'])
+        return _FakeResponse(self.batch)
+
+    def get(self, url, **kwargs):
+        self.fetched.append(url)
+        vid = url.rsplit('/', 1)[1]
+        return _FakeResponse(self.vulns.get(vid, {}), 200 if vid in
+                             self.vulns else 404)
+
+
+LOCKED = [
+    {'name': 'flutter', 'version': '0.0.0', 'source': 'sdk',
+     'dependency': 'direct main'},
+    {'name': 'http', 'version': '0.12.0', 'source': 'hosted',
+     'dependency': 'direct main'},
+    {'name': 'path', 'version': '1.9.0', 'source': 'hosted',
+     'dependency': 'transitive'},
+]
+
+
+class OSVTests(SimpleTestCase):
+
+    def test_vulnerable_package(self):
+        session = _FakeSession(
+            {'results': [{'vulns': [{'id': HTTP_GHSA}]}, {}]},
+            {HTTP_GHSA: OSV_HTTP_VULN})
+        res = osv_vulnerabilities(LOCKED, session=session)
+        self.assertEqual(res, [{
+            'name': 'http', 'version': '0.12.0', 'dependency': 'direct main',
+            'vulns': [{
+                'id': HTTP_GHSA,
+                'summary': 'http before 0.13.3 vulnerable to header injection',
+                'aliases': ['CVE-2020-35669'],
+                'severity': 'medium',
+                'cwe': ['CWE-74'],
+                'fixed': ['0.13.3'],
+                'url': f'https://osv.dev/vulnerability/{HTTP_GHSA}'}]}])
+        # Only hosted packages are sent to OSV
+        self.assertEqual([q['package']['name'] for q in session.queries],
+                         ['http', 'path'])
+        self.assertTrue(all(q['package']['ecosystem'] == 'Pub'
+                            for q in session.queries))
+
+    def test_no_vulns(self):
+        session = _FakeSession({'results': [{}, {}]}, {})
+        self.assertEqual(osv_vulnerabilities(LOCKED, session=session), [])
+
+    def test_network_error_returns_none(self):
+        session = _FakeSession({}, {}, fail=True)
+        self.assertIsNone(osv_vulnerabilities(LOCKED, session=session))
+
+    def test_malformed_batch_returns_none(self):
+        for bad in ({'results': 'x'}, {'results': [{}]}, ['x'], {}):
+            session = _FakeSession(bad, {})
+            self.assertIsNone(osv_vulnerabilities(LOCKED, session=session))
+
+    def test_unsafe_vuln_ids_not_fetched(self):
+        session = _FakeSession(
+            {'results': [{'vulns': [{'id': '../../admin'},
+                                    {'id': 'x' * 200}]}, {}]}, {})
+        self.assertEqual(osv_vulnerabilities(LOCKED, session=session), [])
+        self.assertEqual(session.fetched, [])
+
+    def test_nothing_to_query(self):
+        session = _FakeSession({}, {})
+        self.assertEqual(osv_vulnerabilities(LOCKED[:1], session=session), [])
+        self.assertEqual(session.queries, [])
