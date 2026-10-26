@@ -34,6 +34,10 @@ from mobsf.StaticAnalyzer.views.flutter.obfuscation import (
     package_uris,
     split_debug_info,
 )
+from mobsf.StaticAnalyzer.views.flutter.plugins import (
+    base_package,
+    flutter_plugins,
+)
 from mobsf.StaticAnalyzer.views.flutter.snapshot import (
     read_snapshot_header,
 )
@@ -899,3 +903,134 @@ class ObfuscationTests(SimpleTestCase):
                 for size in (64, 101, 333):
                     self.assertEqual(
                         package_uris(path, chunk_size=size), want)
+
+
+REG = b'Error registering plugin %s, %s'
+IOS_APP = 'Payload/Runner.app/'
+
+
+def _swift_class(module, cls):
+    return f'_TtC{len(module)}{module}{len(cls)}{cls}'.encode()
+
+
+class PluginInventoryTests(SimpleTestCase):
+
+    def _app(self, tmp, files):
+        for rel, data in files.items():
+            path = Path(tmp) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        return list(files)
+
+    def _names(self, res):
+        return sorted((p['name'], p['package']) for p in res)
+
+    def test_android_registrant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                'classes.dex': b'dex\n035\x00q' + REG % (
+                    b'shared_preferences_android',
+                    b'io.flutter.plugins.sharedpreferences.'
+                    b'SharedPreferencesPlugin') + b'\x00',
+                'classes2.dex': b'n' + REG % (
+                    b'flutter_secure_storage',
+                    b'com.it_nomads.fluttersecurestorage.'
+                    b'FlutterSecureStoragePlugin') + b'\x00',
+            })
+            res = flutter_plugins(tmp, rels)
+        self.assertEqual(self._names(res), [
+            ('flutter_secure_storage', 'flutter_secure_storage'),
+            ('shared_preferences_android', 'shared_preferences')])
+        sp = [p for p in res if p['name'] == 'shared_preferences_android'][0]
+        self.assertEqual(
+            sp['class'],
+            'io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin')
+        self.assertEqual(sp['platform'], 'android')
+
+    def test_android_split_apk_dex(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                'split_apks/base/classes.dex': REG % (
+                    b'webview_flutter_android',
+                    b'io.flutter.plugins.webviewflutter.WebViewFlutterPlugin',
+                ) + b'\x00'})
+            res = flutter_plugins(tmp, rels)
+        self.assertEqual(self._names(res),
+                         [('webview_flutter_android', 'webview_flutter')])
+
+    def test_ios_swift_plugins_in_executable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                IOS_APP + 'Info.plist': plistlib.dumps(
+                    {'CFBundleExecutable': 'Runner'},
+                    fmt=plistlib.FMT_BINARY),
+                IOS_APP + 'Runner': b'\xcf\xfa\xed\xfe\x00' + b'\x00'.join([
+                    _swift_class('shared_preferences_foundation',
+                                 'SharedPreferencesPlugin'),
+                    _swift_class('webview_flutter_wkwebview',
+                                 'WebViewFlutterPlugin'),
+                    # Not a plugin class
+                    _swift_class('flutter_secure_storage_darwin',
+                                 'FlutterSecureStorage')]) + b'\x00',
+            })
+            res = flutter_plugins(tmp, rels)
+        self.assertEqual(self._names(res), [
+            ('shared_preferences_foundation', 'shared_preferences'),
+            ('webview_flutter_wkwebview', 'webview_flutter')])
+        self.assertTrue(all(p['platform'] == 'ios' for p in res))
+
+    def test_ios_cocoapods_frameworks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                IOS_APP + 'Frameworks/App.framework/App': b'x',
+                IOS_APP + 'Frameworks/Flutter.framework/Flutter': b'x',
+                IOS_APP + 'Frameworks/url_launcher_ios.framework/'
+                'url_launcher_ios': b'x',
+                IOS_APP + 'Frameworks/FirebaseCore.framework/FirebaseCore':
+                b'x',
+            })
+            res = flutter_plugins(tmp, rels)
+        self.assertEqual(self._names(res),
+                         [('url_launcher_ios', 'url_launcher')])
+
+    def test_bad_mangled_lengths_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rels = self._app(tmp, {
+                IOS_APP + 'Info.plist': plistlib.dumps(
+                    {'CFBundleExecutable': 'Runner'}),
+                IOS_APP + 'Runner': b'_TtC99short5XPlugin\x00'
+                b'_TtC3abc999Plugin\x00',
+            })
+            self.assertEqual(flutter_plugins(tmp, rels), [])
+
+    def test_executable_name_traversal_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / 'outside'
+            outside.write_bytes(_swift_class('evil_plugin', 'EvilPlugin'))
+            rels = self._app(tmp, {
+                IOS_APP + 'Info.plist': plistlib.dumps(
+                    {'CFBundleExecutable': '../../outside'})})
+            self.assertEqual(flutter_plugins(tmp, rels), [])
+
+    def test_rel_path_traversal_and_symlink_rejected(self):
+        with tempfile.TemporaryDirectory() as root:
+            secret = Path(root) / 'host.dex'
+            secret.write_bytes(REG % (b'evil_android', b'a.b.EvilPlugin'))
+            base = Path(root) / 'app'
+            base.mkdir()
+            self.assertEqual(flutter_plugins(base, ['../host.dex']), [])
+            try:
+                os.symlink(secret, base / 'classes.dex')
+            except (OSError, NotImplementedError):
+                self.skipTest('symlinks not supported')
+            self.assertEqual(flutter_plugins(base, ['classes.dex']), [])
+
+    def test_base_package_names(self):
+        for name, base in (('shared_preferences_android',
+                            'shared_preferences'),
+                           ('path_provider_foundation', 'path_provider'),
+                           ('flutter_secure_storage_darwin',
+                            'flutter_secure_storage'),
+                           ('webview_flutter_wkwebview', 'webview_flutter'),
+                           ('jni', 'jni'), ('local_auth_ios', 'local_auth')):
+            self.assertEqual(base_package(name), base)
