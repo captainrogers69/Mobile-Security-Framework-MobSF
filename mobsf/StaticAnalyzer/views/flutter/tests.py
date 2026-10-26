@@ -27,6 +27,10 @@ from mobsf.StaticAnalyzer.views.flutter.checks import (
     flutter_checks,
     load_check_packages,
 )
+from mobsf.StaticAnalyzer.views.flutter.dart_analysis import (
+    dart_code_analysis,
+    load_dart_rules,
+)
 from mobsf.StaticAnalyzer.views.flutter.deeplinks import (
     android_deep_linking,
     ios_deep_linking,
@@ -1388,3 +1392,84 @@ class OSVTests(SimpleTestCase):
         session = _FakeSession({}, {})
         self.assertEqual(osv_vulnerabilities(LOCKED[:1], session=session), [])
         self.assertEqual(session.queries, [])
+
+
+# One positive snippet per Dart rule
+DART_POSITIVE = {
+    'dart_bad_certificate_callback':
+        'client.badCertificateCallback = (cert, host, port) => true;',
+    'dart_http_overrides': 'HttpOverrides.global = MyOverrides();',
+    'dart_webview_js_unrestricted':
+        'c.setJavaScriptMode(JavaScriptMode.unrestricted);',
+    'dart_webview_js_channel':
+        "c.addJavaScriptChannel('Bridge', onMessageReceived: (m) {});",
+    'dart_cleartext_url': "final u = Uri.parse('http://api.example.com/x');",
+    'dart_prefs_sensitive': "await prefs.setString('auth_token', token);",
+    'dart_insecure_random': 'final r = Random();',
+    'dart_weak_hash': 'final d = md5.convert(bytes);',
+    'dart_aes_ecb': 'final e = Encrypter(AES(key, mode: AESMode.ecb));',
+    'dart_sql_interpolation':
+        "db.rawQuery('SELECT * FROM users WHERE name = \"$name\"');",
+    'dart_logging': "print('token: $token');",
+    'dart_secure_random': 'final r = Random.secure();',
+    'dart_ssl_pinning':
+        'final ctx = SecurityContext(withTrustedRoots: false);\n'
+        'ctx.setTrustedCertificatesBytes(certBytes);',
+}
+# Safe code that must not trigger the risky rules
+DART_NEGATIVE = """
+client.badCertificateCallback = (cert, host, port) => host == 'x';
+c.setJavaScriptMode(JavaScriptMode.disabled);
+final a = Uri.parse('https://api.example.com/x');
+final b = Uri.parse('http://localhost:8080');
+final e = Uri.parse('http://10.0.2.2:3000');
+await prefs.setString('theme', 'dark');
+final r = Random.secure();
+final d = sha256.convert(bytes);
+final enc = Encrypter(AES(key, mode: AESMode.gcm));
+db.rawQuery('SELECT * FROM users WHERE name = ?', [name]);
+// print('commented out');
+"""
+RISKY_RULES = set(DART_POSITIVE) - {'dart_secure_random', 'dart_ssl_pinning'}
+
+
+class DartRulesTests(SimpleTestCase):
+
+    def _scan(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel, code in files.items():
+                path = Path(tmp) / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(code)
+            return dart_code_analysis(tmp)
+
+    def test_each_rule_fires(self):
+        files = {f'lib/{rid}.dart': code
+                 for rid, code in DART_POSITIVE.items()}
+        res = self._scan(files)
+        for rid in DART_POSITIVE:
+            self.assertIn(rid, res, rid)
+            # MobSF format: {relative path: 'line numbers'}
+            paths = list(res[rid]['files'])
+            self.assertTrue(any(p.endswith(f'{rid}.dart') for p in paths),
+                            (rid, paths))
+
+    def test_safe_code_quiet(self):
+        res = self._scan({'lib/safe.dart': DART_NEGATIVE})
+        self.assertFalse(set(res) & RISKY_RULES, set(res) & RISKY_RULES)
+
+    def test_generated_and_build_dirs_ignored(self):
+        code = DART_POSITIVE['dart_bad_certificate_callback']
+        res = self._scan({'.dart_tool/x.dart': code, 'build/y.dart': code,
+                          'lib/ok.dart': 'void main() {}'})
+        self.assertNotIn('dart_bad_certificate_callback', res)
+
+    def test_rule_metadata(self):
+        rules = load_dart_rules()
+        self.assertEqual({r['id'] for r in rules}, set(DART_POSITIVE))
+        for rule in rules:
+            self.assertIn(rule['severity'], ('high', 'warning', 'info',
+                                             'good'))
+            self.assertRegex(rule['metadata']['masvs'], r'^[a-z]+-\d+$')
+            if rule['metadata']['cwe']:
+                self.assertRegex(rule['metadata']['cwe'], r'^cwe-\d+$')

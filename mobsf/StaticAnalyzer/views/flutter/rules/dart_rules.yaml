@@ -1,0 +1,174 @@
+- id: dart_bad_certificate_callback
+  message: >-
+    badCertificateCallback returns true: the app accepts any TLS
+    certificate, including forged or self-signed ones. This allows
+    man-in-the-middle attacks.
+  type: Regex
+  pattern: 'badCertificateCallback\s*=\s*\([^)]*\)\s*(?:=>\s*true\b|\{\s*return\s+true\s*;\s*\})'
+  severity: high
+  input_case: exact
+  metadata:
+    cvss: 7.4
+    cwe: cwe-295
+    owasp-mobile: ''
+    masvs: network-3
+- id: dart_http_overrides
+  message: >-
+    The app replaces HttpOverrides.global. Review the override: it is often
+    used to disable certificate validation for every HttpClient.
+  type: Regex
+  pattern: 'HttpOverrides\.global\s*='
+  severity: info
+  input_case: exact
+  metadata:
+    cvss: 0
+    cwe: cwe-295
+    owasp-mobile: ''
+    masvs: network-3
+- id: dart_webview_js_unrestricted
+  message: >-
+    JavaScript is enabled in a WebView. Load only trusted content and avoid
+    exposing native functionality to untrusted pages.
+  type: RegexOr
+  pattern:
+    - 'JavaScriptMode\.unrestricted'
+    - 'javaScriptEnabled\s*:\s*true'
+  severity: warning
+  input_case: exact
+  metadata:
+    cvss: 5.4
+    cwe: cwe-749
+    owasp-mobile: ''
+    masvs: platform-5
+- id: dart_webview_js_channel
+  message: >-
+    A WebView exposes Dart code to JavaScript (JavaScript channel or
+    handler). Validate messages and restrict which pages can call it.
+  type: RegexOr
+  pattern:
+    - 'addJavaScriptChannel\s*\('
+    - 'addJavaScriptHandler\s*\('
+  severity: info
+  input_case: exact
+  metadata:
+    cvss: 0
+    cwe: cwe-749
+    owasp-mobile: ''
+    masvs: platform-7
+- id: dart_cleartext_url
+  message: >-
+    Cleartext HTTP URL. Data sent over HTTP can be read and modified on the
+    network; use HTTPS.
+  type: Regex
+  pattern: '[''"]http://(?!localhost|127\.0\.0\.1|10\.0\.2\.2|0\.0\.0\.0|\[::1\])'
+  severity: warning
+  input_case: exact
+  metadata:
+    cvss: 5.9
+    cwe: cwe-319
+    owasp-mobile: ''
+    masvs: network-1
+- id: dart_prefs_sensitive
+  message: >-
+    Sensitive-looking value stored with SharedPreferences, which is
+    unencrypted. Store tokens and credentials in flutter_secure_storage.
+  type: Regex
+  pattern: '\.set(?:string|stringlist)\(\s*[''"][^''"]*(?:token|password|passwd|secret|api_?key|session|auth|credential)[^''"]*[''"]'
+  severity: warning
+  input_case: lower
+  metadata:
+    cvss: 5.5
+    cwe: cwe-312
+    owasp-mobile: ''
+    masvs: storage-1
+- id: dart_insecure_random
+  message: >-
+    dart:math Random() is not cryptographically secure. Use Random.secure()
+    for tokens, keys, nonces and IDs.
+  type: Regex
+  pattern: '\bRandom\(\s*\d*\s*\)'
+  severity: warning
+  input_case: exact
+  metadata:
+    cvss: 5.3
+    cwe: cwe-330
+    owasp-mobile: ''
+    masvs: crypto-6
+- id: dart_weak_hash
+  message: MD5 or SHA-1 is a weak hash algorithm for security purposes.
+  type: Regex
+  pattern: '\b(?:md5|sha1)\.convert\('
+  severity: warning
+  input_case: exact
+  metadata:
+    cvss: 5.9
+    cwe: cwe-327
+    owasp-mobile: ''
+    masvs: crypto-4
+- id: dart_aes_ecb
+  message: >-
+    AES in ECB mode leaks patterns of the plaintext. Use an authenticated
+    mode such as GCM.
+  type: Regex
+  pattern: 'AESMode\.ecb\b'
+  severity: high
+  input_case: exact
+  metadata:
+    cvss: 5.9
+    cwe: cwe-327
+    owasp-mobile: ''
+    masvs: crypto-3
+- id: dart_sql_interpolation
+  message: >-
+    SQL query built with string interpolation or concatenation. Use
+    parameterized queries (? placeholders) to prevent SQL injection.
+  type: RegexOr
+  pattern:
+    - '\b(?:rawQuery|rawInsert|rawUpdate|rawDelete|execute)\s*\(\s*(?:''[^'']*\$|"[^"]*\$)'
+    - '\b(?:rawQuery|rawInsert|rawUpdate|rawDelete|execute)\s*\(\s*[''"][^''"]*[''"]\s*\+'
+  severity: warning
+  input_case: exact
+  metadata:
+    cvss: 5.9
+    cwe: cwe-89
+    owasp-mobile: ''
+    masvs: platform-2
+- id: dart_logging
+  message: >-
+    The app logs with print/debugPrint. Ensure no sensitive data is logged;
+    print output is visible in device logs in release builds.
+  type: Regex
+  pattern: '\b(?:print|debugPrint)\s*\('
+  severity: info
+  input_case: exact
+  metadata:
+    cvss: 0
+    cwe: cwe-532
+    owasp-mobile: ''
+    masvs: storage-3
+- id: dart_secure_random
+  message: The app uses a cryptographically secure random generator.
+  type: Regex
+  pattern: 'Random\.secure\(\)'
+  severity: good
+  input_case: exact
+  metadata:
+    cvss: 0
+    cwe: ''
+    owasp-mobile: ''
+    masvs: crypto-6
+- id: dart_ssl_pinning
+  message: >-
+    The app restricts trusted certificates with a SecurityContext
+    (certificate pinning in Dart).
+  type: RegexAnd
+  pattern:
+    - 'SecurityContext\s*\('
+    - 'setTrustedCertificates(?:Bytes)?\s*\('
+  severity: good
+  input_case: exact
+  metadata:
+    cvss: 0
+    cwe: ''
+    owasp-mobile: ''
+    masvs: network-4
