@@ -13,9 +13,9 @@ date and notes as work lands. Last updated: 2026-10-27
 | Decisions | 6 | 6 | ✅ |
 | Phase 0 — Git setup | 8 | 8 | ✅ |
 | Phase 0 — Services & credentials | 2 | 3 | 🟡 |
-| Upstream contribution | 3 | 6 | 🟡 |
+| Upstream contribution | 6 | 6 | ✅ |
 | Phase 1 — Detection & strings | 9 | 9 | ✅ |
-| Phase 2 — Snapshot, checks, CLI | 8 | 11 | 🟡 |
+| Phase 2 — Snapshot, checks, CLI | 9 | 11 | 🟡 |
 | Phase 3 — Source ZIP | 4 | 4 | ✅ |
 | Phase 4 — Dynamic (Android) | 0 | 4 | ⬜ |
 | Phase 5 — Diff, iOS, hardening | 0 | 1 | ⬜ |
@@ -69,10 +69,10 @@ date and notes as work lands. Last updated: 2026-10-27
 |---|---|---|---|---|
 | U1 | Feature-request issue upstream | ✅ | 2026-10-23 | MobSF#2722, assigned `ajinabraham`. Asks: core fit, external parser (blutter) OK, report section vs folded, code layout. Wait for answers before first Flutter PR |
 | U2 | Small focused PRs from `upstream/master` | ✅ | 2026-10-26 | First merged: MobSF#2730 (Dart strings from `libapp.so`), approved and merged by `ajinabraham` 2026-10-25, all 13 CI checks green (Linux/macOS/Windows). He merged master in and dropped our `tests_elf.py`, kept `elf.py` as written. Earlier: #2721 superseded by his #2724 |
-| U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | 🟡 | 2026-10-23 | #2721 uses PR template; lint + tests pass. Security-relevant fixes: decide public PR vs private advisory (SECURITY.md) before pushing to fork |
+| U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | ✅ | 2026-10-27 | Standing rule, applied on every PR: PR template, lint + tests pass, CLAUDE.md checklist. Security-relevant fixes: decide public PR vs private advisory (SECURITY.md) before pushing to fork |
 | U4 | GPL-3.0-compatible dependencies only | ✅ | 2026-10-23 | blutter MIT ✅, reFlutter GPL-3.0 ✅, darter AGPL-3.0 ⚠️ (allowed via GPLv3 §13, network clause applies; old Dart only), Doldrums and Guardsquare flutter-re-demo have no license ❌ (reference only). Recommend blutter for F7 |
-| U5 | Fork-only files kept out of upstream PRs | 🟡 | 2026-10-23 | Upstream branches cut from `upstream/master`; #2721 has no fork-only files |
-| U6 | No breaking output/API/DB changes | ⬜ | | |
+| U5 | Fork-only files kept out of upstream PRs | ✅ | 2026-10-27 | Standing rule: upstream branches cut from `upstream/master` (`--no-track`); #2721, #2730, #2734, #2736, #2737 carry no fork-only files. Drafts kept in local `upstream-prs/` (gitignored) |
+| U6 | No breaking output/API/DB changes | ✅ | 2026-10-27 | Flutter is an add-on layer: no change to MobSF's score, DB schema or API parameters. Checked per PR by scanning a plain APK, IPA, Android source ZIP and iOS source ZIP on master and the branch in isolated MobSF homes; reports and scores identical (latest: fork PR #22, 2026-10-27) |
 
 ## Phase 1 — Detection, fingerprinting, strings, reporting
 
@@ -105,8 +105,8 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F7 | Symbol / object-pool recovery | ❓ | 2026-10-23 | Parser choice per U4: blutter recommended (arm64, per-Dart-version build → N2 cache) |
-| F8 | Pub package inventory | 🟡 | 2026-10-26 | Names from Dart `package:` URIs (non-obfuscated) + native plugin inventory `flutter/plugins.py` (Android `GeneratedPluginRegistrant` strings in dex, iOS Swift mangled plugin classes / CocoaPods frameworks; works on obfuscated apps). APK/IPA inventory leaves out desktop-only helpers (`win32`, `win32_registry`, `xdg_directories`). Versions need F7 or `pubspec.lock` (F19) |
+| F7 | Symbol / object-pool recovery | ⛔ | 2026-10-27 | Dropped: maintainer on MobSF#2722 wants no third-party binaries, and blutter needs a per-Dart-version native build. Pure-Python analysis covers the rest (see N1) |
+| F8 | Pub package inventory | ✅ | 2026-10-27 | Names from Dart `package:` URIs (non-obfuscated) + native plugin inventory `flutter/plugins.py` (Android `GeneratedPluginRegistrant` strings in dex, iOS Swift mangled plugin classes / CocoaPods frameworks; works on obfuscated apps). APK/IPA inventory leaves out desktop-only helpers (`win32`, `win32_registry`, `xdg_directories`). Versions come from `pubspec.lock` in source ZIPs (F19); binaries give names only, since version recovery needed F7 (dropped) |
 | F10 | Insecure storage | ✅ | 2026-10-26 | Package level (`checks.py`) + Dart rule `dart_prefs_sensitive` (sensitive keys in SharedPreferences, warning) |
 | F11 | TLS / pinning checks | ✅ | 2026-10-26 | Package level + Dart rules: `badCertificateCallback` returning true (high), `HttpOverrides.global` (info), `SecurityContext` pinning (good). Binary: callback leaves no trace, source only |
 | F12 | Platform-channel enumeration | ✅ | 2026-10-26 | `flutter/channels.py`, list only (no findings). APK/IPA: plugin channels (name matches a detected package), app channels (exact native string in dex / iOS executable that the Dart snapshot also contains), Pigeon channels per package; engine and unattributed names left out. Works on obfuscated apps. Project ZIPs: `MethodChannel`/`EventChannel`/`BasicMessageChannel` names in Dart sources, with files. Web report, PDF, API, CLI. Corpus app `channel_demo` |
@@ -185,3 +185,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | F12 platform channels (list). Corpus app `channel_demo` (3.44.9), 35/35 |
 | 2026-10-26 | F21: iOS app of Flutter project ZIPs (MobSF's offline iOS project-ZIP checks: Swift/Objective-C and iOS API rules, URLs/emails, secrets, Info.plist), channel ↔ native handler files. N1, N2, N4 not applicable; N3 measured |
 | 2026-10-27 | Fork PR #22 (F21) merged (5ac67923). Non-Flutter scans re-checked on master vs branch, isolated MobSF homes: APK 36, IPA 56, Android source ZIP 41, iOS source ZIP 34, identical apart from a resolved IP; no Flutter data in non-Flutter reports. Upstream #2734, #2736, #2737 still awaiting review |
+| 2026-10-27 | Bookkeeping: U3, U5 (standing rules) and U6 (checked per PR by master-vs-branch scans) done; F7 dropped (no third-party binaries, MobSF#2722); F8 done with names-only limit for binaries. Fork synced with upstream 4.6.2 (PR #27) |
