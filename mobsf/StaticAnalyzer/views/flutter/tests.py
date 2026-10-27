@@ -64,6 +64,11 @@ from mobsf.StaticAnalyzer.views.flutter.diff import (
     load_diff_input,
     new_risk,
 )
+from mobsf.StaticAnalyzer.views.flutter.frida_offsets import (
+    SSL_SYMBOL,
+    load_ssl_offsets,
+    parse_offsets_block,
+)
 from mobsf.StaticAnalyzer.views.flutter.engine import (
     REV_RE,
     engine_revisions,
@@ -2837,3 +2842,52 @@ class FlutterDiffTests(SimpleTestCase):
             res = json.loads(buf.getvalue())
         self.assertEqual(res['findings']['new'], [])
         self.assertGreater(res['findings']['unchanged'], 0)
+
+
+FRIDA_JS = """// comment
+/* FLUTTER_SSL_OFFSETS: generated, do not edit */
+var FLUTTER_SSL_OFFSETS = {
+ "31386f7abec07a9f7e731afe5e1e3d88369bf766": {"arm64": 7182332},
+ "495e71106a82e63b2cc8fee291b7759b06561706": {"arm64": 7624996, "arm": 123}
+};
+/* END FLUTTER_SSL_OFFSETS */
+function hook() {}
+"""
+
+
+class FridaOffsetsTests(SimpleTestCase):
+
+    def test_parse_block(self):
+        table = parse_offsets_block(FRIDA_JS)
+        self.assertEqual(table['31386f7abec07a9f7e731afe5e1e3d88369bf766'],
+                         {'arm64': 7182332})
+        self.assertEqual(
+            table['495e71106a82e63b2cc8fee291b7759b06561706']['arm'], 123)
+
+    def test_parse_requires_block(self):
+        with self.assertRaises(ValueError):
+            parse_offsets_block('var x = 1;')
+
+    def test_load_shipped_script(self):
+        table = load_ssl_offsets()
+        # Every key a 40-hex build id, every value arch -> positive int
+        for build_id, arches in table.items():
+            self.assertRegex(build_id, r'^[0-9a-f]{40}$')
+            self.assertTrue(arches)
+            for arch, off in arches.items():
+                self.assertIn(arch, ('arm64', 'arm', 'x86_64', 'x86'))
+                self.assertIsInstance(off, int)
+                self.assertGreater(off, 0)
+        # The corpus engine revisions ship an arm64 offset
+        corpus = {
+            '72ca97bd13ec3d057e31156bfc66a4f1e92386eb': 0x3a251c,
+            'a46086475ee4ec71de8ddd4e5cab30189bf0e0e1': 0x596a98,
+            '31386f7abec07a9f7e731afe5e1e3d88369bf766': 0x6d97fc,
+            '495e71106a82e63b2cc8fee291b7759b06561706': 0x745524,
+        }
+        for build_id, off in corpus.items():
+            self.assertEqual(table[build_id]['arm64'], off, build_id)
+
+    def test_symbol_name_is_mangled_bssl(self):
+        self.assertEqual(
+            SSL_SYMBOL, '_ZN4bssl20ssl_verify_peer_certEPNS_13SSL_HANDSHAKEE')
