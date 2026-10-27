@@ -121,7 +121,8 @@ def scan_source(checksum, app_dir):
     try:
         result = flutter_source_analysis(
             app_dir,
-            osv_enabled=getattr(settings, 'FLUTTER_OSV_ENABLED', False))
+            osv_enabled=getattr(settings, 'FLUTTER_OSV_ENABLED', False),
+            checksum=checksum)
         _store(checksum, result)
         return result
     except Exception as exp:

@@ -104,7 +104,7 @@
             <p><strong>PLATFORM CHANNELS</strong></p>
             <div class="table-responsive">
               <table class="table table-bordered table-hover table-striped">
-                <thead><tr><th>CHANNEL</th><th>FROM</th><th>PACKAGE</th><th>FILES</th></tr></thead>
+                <thead><tr><th>CHANNEL</th><th>FROM</th><th>PACKAGE</th><th>FILES</th><th>NATIVE HANDLER</th></tr></thead>
                 <tbody>
                   {% for c in flutter.platform_channels %}
                   <tr>
@@ -112,11 +112,99 @@
                     <td>{% if c.kind == 'app' %}App{% elif c.kind == 'pigeon' %}Pigeon ({{ c.count }} channels){% else %}Plugin{% endif %}</td>
                     <td>{{ c.package|default_if_none:"" }}</td>
                     <td>{% for f in c.files %}{{ f }}<br/>{% endfor %}</td>
+                    <td>{% for f in c.native_files %}{{ f }}<br/>{% endfor %}</td>
                   </tr>
                   {% endfor %}
                 </tbody>
               </table>
             </div>
+            {% endif %}
+
+            {% if flutter.ios_shell %}
+            <p><strong>IOS APP (ios/)</strong></p>
+            <p>MobSF's iOS checks on the app's own iOS code and <code>ios/Runner/Info.plist</code> (CocoaPods, plugin sources and generated files skipped). High and warning items also appear in the findings above.</p>
+            {% if flutter.ios_shell.ats_findings %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>APP TRANSPORT SECURITY</th><th>SEVERITY</th><th>DESCRIPTION</th></tr></thead>
+                <tbody>
+                  {% for a in flutter.ios_shell.ats_findings %}
+                  <tr>
+                    <td>{{ a.issue }}</td>
+                    <td><span class="badge bg-{% if a.severity == 'high' %}danger{% elif a.severity == 'warning' %}warning{% elif a.severity == 'good' or a.severity == 'secure' %}success{% else %}info{% endif %}">{{ a.severity }}</span></td>
+                    <td>{{ a.description }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+            {% if flutter.ios_shell.code_analysis %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>CODE ISSUE</th><th>SEVERITY</th><th>STANDARDS</th><th>FILES</th></tr></thead>
+                <tbody>
+                  {% for rule, details in flutter.ios_shell.code_analysis.items %}
+                  <tr>
+                    <td>{{ details.metadata.description }}</td>
+                    <td><span class="badge bg-{% if details.metadata.severity == 'high' %}danger{% elif details.metadata.severity == 'warning' %}warning{% elif details.metadata.severity == 'good' or details.metadata.severity == 'secure' %}success{% else %}info{% endif %}">{{ details.metadata.severity }}</span></td>
+                    <td>{% if details.metadata.cwe %}<b>CWE:</b> {{ details.metadata.cwe }}<br/>{% endif %}{% if details.metadata.masvs %}<b>MASVS:</b> {{ details.metadata.masvs }}{% endif %}</td>
+                    <td>{% for file, lines in details.files.items %}ios/{{ file }}: {{ lines }}<br/>{% endfor %}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+            {% if flutter.ios_shell.permissions %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>PERMISSION</th><th>STATUS</th><th>INFO</th><th>REASON IN INFO.PLIST</th></tr></thead>
+                <tbody>
+                  {% for perm, p in flutter.ios_shell.permissions.items %}
+                  <tr><td>{{ perm }}</td><td>{{ p.status }}</td><td>{{ p.info }}</td><td>{{ p.description }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+            {% if flutter.ios_shell.url_schemes %}
+            <p><b>URL schemes:</b> {% for s in flutter.ios_shell.url_schemes %}<span class="badge bg-secondary">{{ s }}</span> {% endfor %}</p>
+            {% endif %}
+            {% if flutter.ios_shell.api %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>IOS API</th><th>FILES</th></tr></thead>
+                <tbody>
+                  {% for rule, details in flutter.ios_shell.api.items %}
+                  <tr>
+                    <td>{{ details.metadata.description }}</td>
+                    <td>{% for file, lines in details.files.items %}ios/{{ file }}: {{ lines }}<br/>{% endfor %}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+            {% if flutter.ios_shell.urls or flutter.ios_shell.emails %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-striped">
+                <thead><tr><th>URLS AND EMAILS</th><th>FILE</th></tr></thead>
+                <tbody>
+                  {% for item in flutter.ios_shell.urls %}
+                  <tr><td>{% for u in item.urls %}{{ u }}<br/>{% endfor %}</td><td>ios/{{ item.path }}</td></tr>
+                  {% endfor %}
+                  {% for item in flutter.ios_shell.emails %}
+                  <tr><td>{% for e in item.emails %}{{ e }}<br/>{% endfor %}</td><td>ios/{{ item.path }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+            {% if flutter.ios_shell.secrets %}
+            <p><b>Possible hardcoded secrets:</b></p>
+            <ul>{% for secret in flutter.ios_shell.secrets %}<li><code>{{ secret }}</code></li>{% endfor %}</ul>
+            {% endif %}
             {% endif %}
 
             <p><strong>PACKAGES</strong></p>

@@ -27,7 +27,14 @@ Plan and status: [`requirements.md`](../requirements.md), [`progress.md`](../pro
 - Dart code rules (e.g. `badCertificateCallback` returning true), with file and line
 - Deep linking flags, declared assets and their secrets
 - Platform channels named in `MethodChannel`, `EventChannel`, `BasicMessageChannel`
-  calls, with files
+  calls, with files and the native handler files in `android/` and `ios/`
+- iOS app (`ios/`): MobSF's offline iOS project-ZIP checks on the app's own code
+  (CocoaPods, plugin sources and generated files skipped): Swift/Objective-C rules,
+  iOS API rules, URLs and emails, hardcoded secrets (code strings and plists), and
+  `ios/Runner/Info.plist` (permissions, App Transport Security, URL schemes). High and
+  warning items are also Flutter findings (`flutter_ios_*`). MobSF's network checks
+  (domain malware check, App Store lookup) are not repeated. `android/` gets MobSF's
+  normal Android source analysis
 - Optional: known vulnerabilities of locked packages from OSV (see below)
 
 ## Where it shows
@@ -87,8 +94,9 @@ python scripts/update_flutter_dart_versions.py --all    # rebuild
   plugin registration, and checks based on Dart names (e.g. JS channels) can't run.
 - WebView JavaScript channels can't be detected in apps using `webview_flutter`
   2.x/3.x: the plugin always contains the method name, used or not.
-- For Flutter project ZIPs, only the Android app in `android/` goes through MobSF's
-  Android source analysis; the iOS app in `ios/` is not analysed yet.
+- A Flutter project ZIP gives one report (Android source). The iOS app is shown in its
+  Flutter section and does not count in MobSF's security score; for a full iOS report,
+  ZIP only `ios/` and upload it.
 - Platform channels: debug builds (no compiled Dart) get no list; Pigeon names of old
   plugins (no package in the name, before 2023) and app channels whose native side is
   outside the dex files / iOS main executable (e.g. in an SDK framework) are not listed.

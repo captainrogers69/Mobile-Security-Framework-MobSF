@@ -47,5 +47,26 @@
         </tbody>
       </table>
       {% endif %}
+      {% if flutter.ios_shell %}
+      </br>
+      <h5>iOS app (ios/)</h5>
+      <table class="basic">
+        <thead><tr><th>ISSUE</th><th>SEVERITY</th><th>DETAILS</th></tr></thead>
+        <tbody>
+          {% for a in flutter.ios_shell.ats_findings %}
+          <tr><td>{{ a.issue }}</td><td>{{ a.severity }}</td><td>{{ a.description }}</td></tr>
+          {% endfor %}
+          {% for rule, details in flutter.ios_shell.code_analysis.items %}
+          <tr><td>{{ details.metadata.description }}</td><td>{{ details.metadata.severity }}</td><td>{% for file, lines in details.files.items %}ios/{{ file }}: {{ lines }}</br>{% endfor %}</td></tr>
+          {% endfor %}
+          {% for perm, p in flutter.ios_shell.permissions.items %}
+          <tr><td>Permission {{ perm }}</td><td>{{ p.status }}</td><td>{{ p.info }}: {{ p.description }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if flutter.ios_shell.url_schemes %}<h5>URL schemes:</h5> {{ flutter.ios_shell.url_schemes|join:", " }}</br>{% endif %}
+      {% if flutter.ios_shell.api %}<h5>iOS APIs:</h5> {% for rule, details in flutter.ios_shell.api.items %}{{ details.metadata.description }}{% if not forloop.last %}, {% endif %}{% endfor %}</br>{% endif %}
+      {% if flutter.ios_shell.secrets %}<h5>Possible hardcoded secrets:</h5> {% for secret in flutter.ios_shell.secrets %}{{ secret }}</br>{% endfor %}{% endif %}
+      {% endif %}
       </br></br>
 {% endif %}
