@@ -76,6 +76,33 @@ SARIF output is SARIF 2.1.0 with CWE and MASVS tags and GitHub `security-severit
 **Secret values are masked** (`"API_KEY" : "abc1****"`) so uploads to code scanning
 don't spread them.
 
+### Comparing two versions
+
+```
+python manage.py flutter_diff <old> <new> [options]
+```
+
+Each side is an APK/AAB/XAPK/IPA/ZIP file or folder (scanned), a `flutter_scan` JSON,
+or a MobSF report JSON (`/api/v1/report_json`; its `flutter` part is used). The output
+lists Flutter/Dart version, build mode and obfuscation changes; new, fixed and
+severity-changed findings; Dart rules with new hits (new files only, line moves are
+ignored); added, removed and updated packages; new secrets in assets (masked).
+
+| Option | Meaning |
+|---|---|
+| `--format text\|json` | Output format (default `text`) |
+| `--output FILE` | Write to a file instead of stdout |
+| `--fail-on-new high\|warning\|info` | Exit with code 1 if the new version adds a finding (or raises a severity) to that level or higher. A new secret in assets counts as `warning` |
+| `--osv` | OSV lookup when scanning a project (sends package names and versions) |
+
+```
+python manage.py flutter_diff app-1.0.apk app-1.1.apk
+python manage.py flutter_diff old_report.json new_report.json --fail-on-new high
+```
+
+Package lists of obfuscated builds come only from native plugin registration, so
+comparing an obfuscated with a non-obfuscated build shows Dart-only packages as removed.
+
 ## Version tables
 
 `dart_versions.json` (snapshot hash → Dart/Flutter versions),
