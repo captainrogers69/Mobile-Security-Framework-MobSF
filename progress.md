@@ -1,7 +1,7 @@
 # Flutter Security Framework — Progress
 
 Tracks every item in [`requirements.md`](requirements.md). Update the status,
-date and notes as work lands. Last updated: 2026-10-26
+date and notes as work lands. Last updated: 2026-10-27
 
 **Legend:** ✅ done · 🟡 in progress · ⬜ not started · ⛔ blocked · ❓ needs decision
 
@@ -183,4 +183,5 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | N5: corpus with 4 Flutter versions (32 apps). JS channel check no longer flags every webview_flutter 2.x/3.x app |
 | 2026-10-26 | Exact Dart version from the Flutter version (also for debug builds); desktop-only packages left out of APK/IPA inventory. Corpus 32/32 |
 | 2026-10-26 | F12 platform channels (list). Corpus app `channel_demo` (3.44.9), 35/35 |
-| 2026-10-26 | F21: iOS app of Flutter project ZIPs (MobSF iOS rules + Info.plist), channel ↔ native handler files. N1, N2, N4 not applicable; N3 measured |
+| 2026-10-26 | F21: iOS app of Flutter project ZIPs (MobSF's offline iOS project-ZIP checks: Swift/Objective-C and iOS API rules, URLs/emails, secrets, Info.plist), channel ↔ native handler files. N1, N2, N4 not applicable; N3 measured |
+| 2026-10-27 | Fork PR #22 (F21) merged (5ac67923). Non-Flutter scans re-checked on master vs branch, isolated MobSF homes: APK 36, IPA 56, Android source ZIP 41, iOS source ZIP 34, identical apart from a resolved IP; no Flutter data in non-Flutter reports. Upstream #2734, #2736, #2737 still awaiting review |
