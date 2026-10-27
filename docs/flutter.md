@@ -24,7 +24,8 @@ Plan and status: [`requirements.md`](../requirements.md), [`progress.md`](../pro
 
 **Flutter project ZIPs**
 - `pubspec.lock` packages with exact versions
-- Dart code rules (e.g. `badCertificateCallback` returning true), with file and line
+- Dart code rules (e.g. `badCertificateCallback` returning true, a token or password
+  logged with `print`/`debugPrint`), with file and line
 - Deep linking flags, declared assets and their secrets
 - Platform channels named in `MethodChannel`, `EventChannel`, `BasicMessageChannel`
   calls, with files and the native handler files in `android/` and `ios/`

@@ -129,7 +129,8 @@ Goal: get the Flutter work merged into upstream MobSF later.
 - F14. Root/jailbreak/tamper detection presence (`flutter_jailbreak_detection`,
   `freerasp`, etc.).
 - F15. Deep links / `go_router` / `uni_links` routes vs. manifest/plist intent filters.
-- F16. Logging of sensitive data (`print`, `debugPrint`, `log` in release).
+- F16. Logging of sensitive data (`print`, `debugPrint`, `log` in release). Static part:
+  Dart source rules. The binary has no call sites without F7, so the runtime part is F36.
 - F17. Map every finding to OWASP MASVS v2 + CWE.
 
 ### 6.4 Source-ZIP flow (P1)
@@ -147,6 +148,8 @@ Goal: get the Flutter work merged into upstream MobSF later.
 - F23. Platform-channel tracing (hook `MethodChannel` invoke on native side).
 - F24. Runtime storage dump (shared_prefs, secure storage, hive boxes).
 - F25. Android first; iOS behind a flag (Q5).
+- F36. Sensitive data in runtime logs: during dynamic analysis, check the app's Flutter
+  log output (logcat `flutter` tag) for secrets, tokens and credentials (runtime half of F16).
 
 ### 6.6 Reporting & API (P0 for whatever ships)
 - F26. Dedicated "Flutter" section in HTML/PDF/JSON report.
