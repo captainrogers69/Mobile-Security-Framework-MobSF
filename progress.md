@@ -18,7 +18,7 @@ date and notes as work lands. Last updated: 2026-10-27
 | Phase 2 — Snapshot, checks, CLI | 10 | 11 | 🟡 |
 | Phase 3 — Source ZIP | 4 | 4 | ✅ |
 | Phase 4 — Dynamic (Android) | 0 | 5 | ⬜ |
-| Phase 5 — Diff, iOS, hardening | 0 | 1 | ⬜ |
+| Phase 5 — Diff, iOS, hardening | 1 | 1 | ✅ |
 | False-positive reduction | 0 | 6 | 🟡 |
 | Non-functional | 5 | 6 | 🟡 |
 
@@ -140,7 +140,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F28 | Scan comparison between versions | ⬜ | | |
+| F28 | Scan comparison between versions | ✅ | 2026-10-27 | `python manage.py flutter_diff OLD NEW` (`flutter/diff.py`): inputs are apps/folders, `flutter_scan` JSON or MobSF report JSON. Version/build/obfuscation changes, new/fixed/severity-changed findings, Dart rules with new files, package changes, new asset secrets (masked). Text or JSON; `--fail-on-new` for CI. Fork CLI only: no MobSF API/UI change |
 
 ## Non-functional (ongoing)
 
@@ -188,3 +188,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-27 | Fork PR #22 (F21) merged (5ac67923). Non-Flutter scans re-checked on master vs branch, isolated MobSF homes: APK 36, IPA 56, Android source ZIP 41, iOS source ZIP 34, identical apart from a resolved IP; no Flutter data in non-Flutter reports. Upstream #2734, #2736, #2737 still awaiting review |
 | 2026-10-27 | Bookkeeping: U3, U5 (standing rules) and U6 (checked per PR by master-vs-branch scans) done; F7 dropped (no third-party binaries, MobSF#2722); F8 done with names-only limit for binaries. Fork synced with upstream 4.6.2 (PR #27) |
 | 2026-10-27 | F16: Dart rule `dart_logging_sensitive` (sensitive values logged with print/debugPrint, warning). F36 added to Phase 4 for the runtime log check |
+| 2026-10-27 | F28: `flutter_diff` command compares two app versions (findings, Dart rules, packages, versions, asset secrets). Checked on corpus builds 3.27.4 → 3.44.9 and 3.0.5 → 3.44.9 (fixed advisories listed) |

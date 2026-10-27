@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
@@ -57,6 +58,11 @@ from mobsf.StaticAnalyzer.views.flutter.deeplinks import (
 from mobsf.StaticAnalyzer.views.flutter.detect import (
     detect_flutter,
     flutter_from_dir,
+)
+from mobsf.StaticAnalyzer.views.flutter.diff import (
+    diff_results,
+    load_diff_input,
+    new_risk,
 )
 from mobsf.StaticAnalyzer.views.flutter.engine import (
     REV_RE,
@@ -2637,3 +2643,197 @@ class IOSShellTests(SimpleTestCase):
         self.assertEqual(res[0]['native_files'], [
             'android/app/src/main/kotlin/com/example/demo/MainActivity.kt',
             'ios/Runner/AppDelegate.swift'])
+
+
+def _diff_finding(fid, severity, packages=()):
+    return {'id': fid, 'severity': severity, 'title': fid.upper(),
+            'description': 'd', 'packages': list(packages), 'cwe': '',
+            'masvs': ''}
+
+
+def _diff_rule(severity, files):
+    return {'files': files, 'metadata': {'severity': severity,
+                                         'description': 'rule'}}
+
+
+DIFF_OLD = {
+    'is_flutter': True,
+    'platform': 'android',
+    'build_mode': 'release',
+    'flutter': ['3.27.4'],
+    'dart': ['3.6.2'],
+    'obfuscated': True,
+    'packages': ['http', 'shared_preferences', 'webview_flutter'],
+    'findings': [_diff_finding('flutter_old_engine', 'high'),
+                 _diff_finding('flutter_insecure_storage', 'info'),
+                 _diff_finding('flutter_webview', 'info')],
+    'code_analysis': {
+        'dart_logging': _diff_rule('info', {'lib/main.dart': '3'}),
+        'dart_weak_hash': _diff_rule('warning', {'lib/a.dart': '1'}),
+    },
+    'asset_secrets': [{'file': 'assets/.env',
+                       'secrets': ['"API_KEY" : "oldvalue123"']}],
+}
+DIFF_NEW = {
+    'is_flutter': True,
+    'platform': 'android',
+    'build_mode': 'release',
+    'flutter': ['3.44.9'],
+    'dart': ['3.12.0'],
+    'obfuscated': False,
+    'packages': ['http', 'shared_preferences', 'local_auth'],
+    'findings': [_diff_finding('flutter_insecure_storage', 'warning'),
+                 _diff_finding('flutter_webview', 'info'),
+                 _diff_finding('flutter_not_obfuscated', 'warning')],
+    'code_analysis': {
+        'dart_logging': _diff_rule('info', {'lib/main.dart': '9',
+                                            'lib/b.dart': '2'}),
+        'dart_logging_sensitive': _diff_rule('warning',
+                                             {'lib/b.dart': '2'}),
+        'dart_secure_random': _diff_rule('good', {'lib/c.dart': '1'}),
+    },
+    'asset_secrets': [{'file': 'assets/.env',
+                       'secrets': ['"API_KEY" : "oldvalue123"',
+                                   '"AWS_SECRET" : "newsecret456"']}],
+}
+
+
+class FlutterDiffTests(SimpleTestCase):
+
+    def test_findings(self):
+        res = diff_results(DIFF_OLD, DIFF_NEW)['findings']
+        self.assertEqual([f['id'] for f in res['new']],
+                         ['flutter_not_obfuscated'])
+        self.assertEqual([f['id'] for f in res['fixed']],
+                         ['flutter_old_engine'])
+        self.assertEqual(res['changed'], [{
+            'id': 'flutter_insecure_storage',
+            'title': 'FLUTTER_INSECURE_STORAGE',
+            'old_severity': 'info', 'new_severity': 'warning'}])
+        self.assertEqual(res['unchanged'], 1)
+
+    def test_code_analysis(self):
+        res = diff_results(DIFF_OLD, DIFF_NEW)['code_analysis']
+        self.assertEqual(
+            [(r['id'], r['severity'], r['files']) for r in res['new']],
+            [('dart_logging_sensitive', 'warning', ['lib/b.dart']),
+             ('dart_secure_random', 'good', ['lib/c.dart'])])
+        self.assertEqual([r['id'] for r in res['fixed']], ['dart_weak_hash'])
+        # Moved lines are not a change; a new file is
+        self.assertEqual(res['new_files'], [{
+            'id': 'dart_logging', 'severity': 'info',
+            'files': ['lib/b.dart']}])
+
+    def test_packages_and_facts(self):
+        res = diff_results(DIFF_OLD, DIFF_NEW)
+        self.assertEqual(res['packages']['added'],
+                         [{'name': 'local_auth', 'version': ''}])
+        self.assertEqual(res['packages']['removed'],
+                         [{'name': 'webview_flutter', 'version': ''}])
+        self.assertEqual(res['facts']['flutter'],
+                         {'old': ['3.27.4'], 'new': ['3.44.9']})
+        self.assertEqual(res['facts']['obfuscated'],
+                         {'old': True, 'new': False})
+        self.assertNotIn('build_mode', res['facts'])
+
+    def test_source_package_versions(self):
+        old = {'is_flutter': True, 'packages': [
+            {'name': 'http', 'version': '0.13.6'},
+            {'name': 'dio', 'version': '5.0.0'}]}
+        new = {'is_flutter': True, 'packages': [
+            {'name': 'http', 'version': '1.2.0'},
+            {'name': 'dio', 'version': '5.0.0'}]}
+        res = diff_results(old, new)['packages']
+        self.assertEqual(res['changed'], [
+            {'name': 'http', 'old': '0.13.6', 'new': '1.2.0'}])
+        self.assertEqual(res['added'], [])
+
+    def test_secrets_masked(self):
+        res = diff_results(DIFF_OLD, DIFF_NEW)['secrets']
+        self.assertEqual(res['new'], [{'file': 'assets/.env',
+                                       'secret': '"AWS_SECRET" : "news****"'}])
+        self.assertEqual(res['removed'], 0)
+        self.assertNotIn('newsecret456', json.dumps(res))
+
+    def test_identical(self):
+        res = diff_results(DIFF_NEW, DIFF_NEW)
+        self.assertEqual(res['findings']['new'], [])
+        self.assertEqual(res['findings']['unchanged'], 3)
+        self.assertEqual(res['facts'], {})
+        self.assertIsNone(new_risk(res))
+
+    def test_new_risk(self):
+        res = diff_results(DIFF_OLD, DIFF_NEW)
+        # New/worse warnings; good rules and info files do not count higher
+        self.assertEqual(new_risk(res), 'warning')
+        fixed_only = diff_results(DIFF_NEW, DIFF_OLD)
+        # Reversed: old engine (high) is new
+        self.assertEqual(new_risk(fixed_only), 'high')
+
+    def test_load_report_json_and_scan_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / 'report.json'
+            report.write_text(json.dumps({'app_name': 'x',
+                                          'flutter': DIFF_OLD}))
+            scan = Path(tmp) / 'scan.json'
+            scan.write_text(json.dumps(DIFF_NEW))
+            self.assertEqual(load_diff_input(report), DIFF_OLD)
+            self.assertEqual(load_diff_input(scan), DIFF_NEW)
+
+    def test_load_rejects_non_flutter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for i, data in enumerate(({'app_name': 'x', 'flutter': None},
+                                      [1, 2], {'a': 1})):
+                path = Path(tmp) / f'{i}.json'
+                path.write_text(json.dumps(data))
+                with self.assertRaises(ValueError):
+                    load_diff_input(path)
+
+    @unittest.skipIf(sys.platform == 'win32', 'symlinks need admin')
+    def test_load_rejects_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            real = Path(tmp) / 'real.json'
+            real.write_text(json.dumps(DIFF_OLD))
+            link = Path(tmp) / 'link.json'
+            link.symlink_to(real)
+            with self.assertRaises(ValueError):
+                load_diff_input(link)
+
+    def test_command_text_json_and_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / 'old.json'
+            new = Path(tmp) / 'new.json'
+            old.write_text(json.dumps(DIFF_OLD))
+            new.write_text(json.dumps(DIFF_NEW))
+            buf = io.StringIO()
+            call_command('flutter_diff', str(old), str(new), stdout=buf)
+            text = buf.getvalue()
+            self.assertIn('flutter_not_obfuscated', text)
+            self.assertIn('Fixed', text)
+            self.assertNotIn('newsecret456', text)
+            buf = io.StringIO()
+            call_command('flutter_diff', str(old), str(new),
+                         '--format', 'json', stdout=buf)
+            self.assertEqual(json.loads(buf.getvalue())['findings']['fixed']
+                             [0]['id'], 'flutter_old_engine')
+            # Only warnings are new: high gate passes, warning gate fails
+            call_command('flutter_diff', str(old), str(new),
+                         '--fail-on-new', 'high', stdout=io.StringIO())
+            with self.assertRaises(SystemExit) as ctx:
+                call_command('flutter_diff', str(old), str(new),
+                             '--fail-on-new', 'warning',
+                             stdout=io.StringIO())
+            self.assertEqual(ctx.exception.code, 1)
+
+    def test_command_scans_apps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = Path(tmp) / 'app.apk'
+            with zipfile.ZipFile(apk, 'w') as zf:
+                for rel, data in ANDROID_APP.items():
+                    zf.writestr(rel, data)
+            buf = io.StringIO()
+            call_command('flutter_diff', str(apk), str(apk),
+                         '--format', 'json', stdout=buf)
+            res = json.loads(buf.getvalue())
+        self.assertEqual(res['findings']['new'], [])
+        self.assertGreater(res['findings']['unchanged'], 0)
