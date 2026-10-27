@@ -1498,6 +1498,7 @@ DART_POSITIVE = {
     'dart_sql_interpolation':
         "db.rawQuery('SELECT * FROM users WHERE name = \"$name\"');",
     'dart_logging': "print('token: $token');",
+    'dart_logging_sensitive': "debugPrint('token: $token');",
     'dart_secure_random': 'final r = Random.secure();',
     'dart_ssl_pinning':
         'final ctx = SecurityContext(withTrustedRoots: false);\n'
@@ -1544,6 +1545,35 @@ class DartRulesTests(SimpleTestCase):
     def test_safe_code_quiet(self):
         res = self._scan({'lib/safe.dart': DART_NEGATIVE})
         self.assertFalse(set(res) & RISKY_RULES, set(res) & RISKY_RULES)
+
+    def test_sensitive_logging_values(self):
+        logged = {
+            'interp.dart': "print('auth ${user.accessToken}');",
+            'concat.dart': "debugPrint('Bearer ' + apiKey);",
+            'bare.dart': 'print(password);',
+            'field.dart': 'debugPrint(session.sessionId);',
+            'secret.dart': "print('key=$clientSecret');",
+        }
+        res = self._scan({f'lib/{k}': v for k, v in logged.items()})
+        paths = res.get('dart_logging_sensitive', {}).get('files', {})
+        for name in logged:
+            self.assertTrue(any(p.endswith(name) for p in paths),
+                            (name, paths))
+
+    def test_sensitive_logging_words_only_quiet(self):
+        # The word in message text or a harmless value is not a leak
+        code = """
+print('Login failed, check your password');
+debugPrint('token refresh scheduled');
+print('count: $count');
+print(user.name);
+print('Parsing ${credentialsFile.path} failed');
+debugPrint('size ${token.length}');
+print(password.isEmpty);
+"""
+        res = self._scan({'lib/quiet.dart': code})
+        self.assertIn('dart_logging', res)
+        self.assertNotIn('dart_logging_sensitive', res)
 
     def test_generated_and_build_dirs_ignored(self):
         code = DART_POSITIVE['dart_bad_certificate_callback']

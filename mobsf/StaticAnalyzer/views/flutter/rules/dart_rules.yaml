@@ -146,6 +146,21 @@
     cwe: cwe-532
     owasp-mobile: ''
     masvs: storage-3
+- id: dart_logging_sensitive
+  message: >-
+    A sensitive-looking value (token, password, secret, API key, session)
+    is logged with print/debugPrint. Both still run in release builds, so
+    the value is written to the device log. Harmless properties such as
+    .path or .length are not reported.
+  type: Regex
+  pattern: '\b(?:debugprint|print)\s*\(\s*(?:[^;\n]*?(?:\$\{?|\+\s*))?[\w.]*(?:token|password|passwd|passcode|secret|api_?key|bearer|credential|cookie|session_?id|private_?key|authorization)\w*(?!\w|\.(?:path|length|isempty|isnotempty|runtimetype|hashcode)\b)'
+  severity: warning
+  input_case: lower
+  metadata:
+    cvss: 5.5
+    cwe: cwe-532
+    owasp-mobile: ''
+    masvs: storage-3
 - id: dart_secure_random
   message: The app uses a cryptographically secure random generator.
   type: Regex

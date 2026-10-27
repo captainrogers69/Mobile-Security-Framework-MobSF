@@ -15,9 +15,9 @@ date and notes as work lands. Last updated: 2026-10-27
 | Phase 0 — Services & credentials | 2 | 3 | 🟡 |
 | Upstream contribution | 6 | 6 | ✅ |
 | Phase 1 — Detection & strings | 9 | 9 | ✅ |
-| Phase 2 — Snapshot, checks, CLI | 9 | 11 | 🟡 |
+| Phase 2 — Snapshot, checks, CLI | 10 | 11 | 🟡 |
 | Phase 3 — Source ZIP | 4 | 4 | ✅ |
-| Phase 4 — Dynamic (Android) | 0 | 4 | ⬜ |
+| Phase 4 — Dynamic (Android) | 0 | 5 | ⬜ |
 | Phase 5 — Diff, iOS, hardening | 0 | 1 | ⬜ |
 | False-positive reduction | 0 | 6 | 🟡 |
 | Non-functional | 5 | 6 | 🟡 |
@@ -113,7 +113,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | F13 | WebView plugin checks | ✅ | 2026-10-26 | Package level; binary: `addJavaScriptChannel` name (non-obfuscated); Dart rules: unrestricted JS (warning), JS channels/handlers (info) |
 | F14 | Root/jailbreak/tamper detection presence | ✅ | 2026-10-26 | Package level: detection package good / absent info (resilience-1). Package names verified on pub.dev |
 | F15 | Deep links vs manifest/plist | ✅ | 2026-10-26 | `deeplinks.py`: `flutter_deeplinking_enabled` (manifest) / `FlutterDeepLinkingEnabled` (Info.plist) → info (cwe-939, platform-1), APK/IPA and project ZIP |
-| F16 | Sensitive logging | 🟡 | 2026-10-26 | Dart rule `dart_logging` (print/debugPrint, info). No binary-level check |
+| F16 | Sensitive logging | ✅ | 2026-10-27 | Dart rules: `dart_logging` (any print/debugPrint, info) and `dart_logging_sensitive` (warning: a token/password/secret/API key/session value is logged, e.g. `print('t: $token')`, `debugPrint('Bearer ' + apiKey)`; the word only in message text or `.path`/`.length` is not reported). Both still print in release builds. No binary-level check (no call sites without F7); runtime check is F36 |
 | F17 | MASVS v2 + CWE mapping | ✅ | 2026-10-26 | Every Flutter finding has a MASVS v2 category and, where one applies, a CWE (none on "good" findings or on Dart advisories without a published CWE). Shown in report and API, SARIF tags |
 | F29 | CLI + SARIF output | ✅ | 2026-10-26 | `manage.py flutter_scan` (`--format json\|sarif`, `--output`, `--fail-on`, `--osv`), SARIF 2.1.0 with masked secrets. See `docs/flutter.md` |
 
@@ -134,6 +134,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | F23 | Platform-channel tracing | ⬜ | | |
 | F24 | Runtime storage dump | ⬜ | | |
 | F25 | iOS dynamic behind flag | ⬜ | | After Android (Q3) |
+| F36 | Sensitive data in runtime logs | ⬜ | | Runtime half of F16: check the app's Flutter log output (logcat `flutter` tag) during dynamic analysis |
 
 ## Phase 5 — Diff, iOS parity, hardening
 
@@ -186,3 +187,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-26 | F21: iOS app of Flutter project ZIPs (MobSF's offline iOS project-ZIP checks: Swift/Objective-C and iOS API rules, URLs/emails, secrets, Info.plist), channel ↔ native handler files. N1, N2, N4 not applicable; N3 measured |
 | 2026-10-27 | Fork PR #22 (F21) merged (5ac67923). Non-Flutter scans re-checked on master vs branch, isolated MobSF homes: APK 36, IPA 56, Android source ZIP 41, iOS source ZIP 34, identical apart from a resolved IP; no Flutter data in non-Flutter reports. Upstream #2734, #2736, #2737 still awaiting review |
 | 2026-10-27 | Bookkeeping: U3, U5 (standing rules) and U6 (checked per PR by master-vs-branch scans) done; F7 dropped (no third-party binaries, MobSF#2722); F8 done with names-only limit for binaries. Fork synced with upstream 4.6.2 (PR #27) |
+| 2026-10-27 | F16: Dart rule `dart_logging_sensitive` (sensitive values logged with print/debugPrint, warning). F36 added to Phase 4 for the runtime log check |
