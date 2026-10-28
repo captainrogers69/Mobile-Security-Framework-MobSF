@@ -103,6 +103,20 @@ python manage.py flutter_diff old_report.json new_report.json --fail-on-new high
 Package lists of obfuscated builds come only from native plugin registration, so
 comparing an obfuscated with a non-obfuscated build shows Dart-only packages as removed.
 
+## Dynamic analysis
+
+Scripts for the dynamic analyzer live in
+`mobsf/DynamicAnalyzer/tools/frida_scripts/flutter/`.
+
+- **TLS bypass (F22)** — `ssl-bypass-flutter.js`. Flutter uses its own BoringSSL
+  in `libflutter.so` and ignores the system proxy and CA store, so HTTPS traffic
+  is not visible to a MITM proxy by default. The script neutralises the engine's
+  certificate check. The check has no symbol and moves every build, so the engine
+  is matched by its GNU build-id and the offset is taken from a table (fallback: a
+  byte-pattern scan). Regenerate the table with
+  `scripts/update_flutter_frida_offsets.py`. Run on a rooted device/emulator and
+  pair with a transparent proxy.
+
 ## Version tables
 
 `dart_versions.json` (snapshot hash → Dart/Flutter versions),

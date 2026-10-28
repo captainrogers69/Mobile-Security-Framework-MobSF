@@ -130,7 +130,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F22 | Flutter TLS bypass + transparent proxy | ⬜ | | Emulators first (Q5) |
+| F22 | Flutter TLS bypass + transparent proxy | 🟡 | 2026-10-27 | TLS-bypass script `frida_scripts/flutter/ssl-bypass-flutter.js`: neutralises `bssl::ssl_verify_peer_cert` in `libflutter.so`, engine matched by GNU build-id → offset table (byte-pattern fallback). Build-id/offset generator `scripts/update_flutter_frida_offsets.py` (lief); loader+tests `flutter/frida_offsets.py`. Verified on `MobSF_API33` across Flutter 3.0.5/3.10.6/3.27.4/3.44.9 (old pattern-only script missed 3.44.9). Left: transparent-proxy (iptables) wiring and a live captured-request demo |
 | F23 | Platform-channel tracing | ⬜ | | |
 | F24 | Runtime storage dump | ⬜ | | |
 | F25 | iOS dynamic behind flag | ⬜ | | After Android (Q3) |
@@ -189,3 +189,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-27 | Bookkeeping: U3, U5 (standing rules) and U6 (checked per PR by master-vs-branch scans) done; F7 dropped (no third-party binaries, MobSF#2722); F8 done with names-only limit for binaries. Fork synced with upstream 4.6.2 (PR #27) |
 | 2026-10-27 | F16: Dart rule `dart_logging_sensitive` (sensitive values logged with print/debugPrint, warning). F36 added to Phase 4 for the runtime log check |
 | 2026-10-27 | F28: `flutter_diff` command compares two app versions (findings, Dart rules, packages, versions, asset secrets). Checked on corpus builds 3.27.4 → 3.44.9 and 3.0.5 → 3.44.9 (fixed advisories listed) |
+| 2026-10-27 | F22 (part): build-id-based Flutter TLS bypass Frida script + offset generator; hooks `ssl_verify_peer_cert` across 4 engine builds on an Android 13 emulator. Not yet auto-run by MobSF; proxy wiring pending |
