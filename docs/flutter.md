@@ -117,6 +117,43 @@ Scripts for the dynamic analyzer live in
   `scripts/update_flutter_frida_offsets.py`. Run on a rooted device/emulator and
   pair with a transparent proxy.
 
+### Capturing Flutter HTTPS (F22)
+
+`scripts/flutter_mitm.py` wires a rooted device/emulator's traffic into a
+host MITM proxy and runs the bypass. The bypass makes the app accept the
+proxy's certificate, so no CA has to be installed on the device.
+
+```
+# 1. start the proxy on the host (single-host target shown)
+mitmdump --mode reverse:https://api.example.com:443 -p 8080
+
+# 2. route the device's 443/80 into it (adb reverse + iptables DNAT)
+python scripts/flutter_mitm.py wire
+
+# 3. launch the app with the TLS bypass; watch decrypted traffic in mitmproxy
+python scripts/flutter_mitm.py hook com.example.app
+
+# 4. restore the device
+python scripts/flutter_mitm.py unwire
+```
+
+Proxy mode notes:
+
+- `mitmdump --mode transparent` cannot recover the original destination from a
+  device-side DNAT on macOS. Use **reverse** mode for a single target host, or
+  **`--mode wireguard`** (with a WireGuard client on the device) for arbitrary
+  hosts. On a Linux host, classic transparent mode with TPROXY also works.
+- Traffic reaches the host proxy over `adb reverse` (device `127.0.0.1:<port>` →
+  host), which sidesteps emulator NIC/routing quirks; the script enables
+  `route_localnet` so the DNAT to loopback is allowed.
+
+Verified on an Android 13 emulator against a Flutter 3.44.9 release build: with
+the bypass, the app's `GET https://.../` is decrypted by mitmproxy; without it,
+the app aborts the handshake and only a TLS ClientHello reaches the proxy.
+
+This is a manual analyst tool — it is not imported by MobSF's scan or dynamic
+analyzer and does not change their behaviour.
+
 ## Version tables
 
 `dart_versions.json` (snapshot hash → Dart/Flutter versions),
