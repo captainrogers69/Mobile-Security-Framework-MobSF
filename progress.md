@@ -17,7 +17,7 @@ date and notes as work lands. Last updated: 2026-10-27
 | Phase 1 — Detection & strings | 9 | 9 | ✅ |
 | Phase 2 — Snapshot, checks, CLI | 10 | 11 | 🟡 |
 | Phase 3 — Source ZIP | 4 | 4 | ✅ |
-| Phase 4 — Dynamic (Android) | 0 | 5 | ⬜ |
+| Phase 4 — Dynamic (Android) | 1 | 5 | 🟡 |
 | Phase 5 — Diff, iOS, hardening | 1 | 1 | ✅ |
 | False-positive reduction | 0 | 6 | 🟡 |
 | Non-functional | 5 | 6 | 🟡 |
@@ -130,7 +130,7 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F22 | Flutter TLS bypass + transparent proxy | 🟡 | 2026-10-27 | TLS-bypass script `frida_scripts/flutter/ssl-bypass-flutter.js`: neutralises `bssl::ssl_verify_peer_cert` in `libflutter.so`, engine matched by GNU build-id → offset table (byte-pattern fallback). Build-id/offset generator `scripts/update_flutter_frida_offsets.py` (lief); loader+tests `flutter/frida_offsets.py`. Verified on `MobSF_API33` across Flutter 3.0.5/3.10.6/3.27.4/3.44.9 (old pattern-only script missed 3.44.9). Left: transparent-proxy (iptables) wiring and a live captured-request demo |
+| F22 | Flutter TLS bypass + transparent proxy | ✅ | 2026-10-28 | TLS-bypass script `frida_scripts/flutter/ssl-bypass-flutter.js`: neutralises `bssl::ssl_verify_peer_cert` in `libflutter.so`, engine matched by GNU build-id → offset table (byte-pattern fallback). Build-id/offset generator `scripts/update_flutter_frida_offsets.py` (lief); loader+tests `flutter/frida_offsets.py`. Verified on `MobSF_API33` across Flutter 3.0.5/3.10.6/3.27.4/3.44.9 (old pattern-only script missed 3.44.9). Transparent-proxy wiring: `scripts/flutter_mitm.py` (`wire`/`hook`/`unwire`: adb reverse + `route_localnet` + iptables DNAT 443/80→loopback; reverse/wireguard/TPROXY mode notes). Live demo on a Flutter 3.44.9 release APK: with the bypass mitmproxy decrypts the app's HTTPS GET (marker header, UA `Dart/3.12 (dart:io)`, 200); control without it → HandshakeException, only a ClientHello reaches the proxy. Docs in `docs/flutter.md`. Analyst tool only; no change to MobSF's scan/dynamic analyzer |
 | F23 | Platform-channel tracing | ⬜ | | |
 | F24 | Runtime storage dump | ⬜ | | |
 | F25 | iOS dynamic behind flag | ⬜ | | After Android (Q3) |
@@ -190,4 +190,5 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-27 | F16: Dart rule `dart_logging_sensitive` (sensitive values logged with print/debugPrint, warning). F36 added to Phase 4 for the runtime log check |
 | 2026-10-27 | F28: `flutter_diff` command compares two app versions (findings, Dart rules, packages, versions, asset secrets). Checked on corpus builds 3.27.4 → 3.44.9 and 3.0.5 → 3.44.9 (fixed advisories listed) |
 | 2026-10-27 | F22 (part): build-id-based Flutter TLS bypass Frida script + offset generator; hooks `ssl_verify_peer_cert` across 4 engine builds on an Android 13 emulator. Not yet auto-run by MobSF; proxy wiring pending |
-| 2026-10-28 | Fork PR #31 (F22 part) merged (`e462a60c`); side-by-side on master vs branch identical (APK 36, IPA 56, Android ZIP 41, iOS ZIP 34, Flutter ZIP 56). Upstream MobSF#2736 (F30) merged → F30 ✅, 2 upstream PRs left open (#2734, #2737). F33 (queue 02) rebased onto current upstream, lint + tests pass, ready to open |
+| 2026-10-28 | Fork PR #31 (F22 part) merged (`e462a60c`); side-by-side on master vs branch identical (APK 36, IPA 56, Android ZIP 41, iOS ZIP 34, Flutter ZIP 56). Upstream MobSF#2736 (F30) merged → F30 ✅, 2 upstream PRs left open (#2734, #2737). F33 (queue 02) rebased onto current upstream, lint + tests pass, then opened as MobSF#2742 |
+| 2026-10-28 | F22 ✅ complete: `scripts/flutter_mitm.py` transparent-proxy wiring + live captured-request demo on a Flutter 3.44.9 release APK (mitmproxy decrypts the app's HTTPS with the bypass; handshake fails without it). docs/flutter.md Dynamic section expanded. Phase 4 1/5 |
