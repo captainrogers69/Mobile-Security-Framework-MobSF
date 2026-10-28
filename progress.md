@@ -94,10 +94,10 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 
 | ID | Task | Status | Updated | Notes |
 |---|---|---|---|---|
-| F30 | Skip `io/flutter/` in code analysis | 🟡 | 2026-10-26 | Upstream PR MobSF#2736 open (1 line in `SKIP_CLASS_PATH`). Flutter APK code hits 76 → 61, non-Flutter sample unchanged |
+| F30 | Skip `io/flutter/` in code analysis | ✅ | 2026-10-28 | Upstream PR MobSF#2736 **merged** 2026-10-28 (1 line in `SKIP_CLASS_PATH`). Flutter APK code hits 76 → 61, non-Flutter sample unchanged |
 | F31 | No secrets/URLs from `libflutter.so` | 🟡 | 2026-10-26 | Upstream PR MobSF#2737 open (with F32): engine (`libflutter.so`, `Flutter.framework/Flutter`) reports only known-format secrets, Android + iOS paths. APK secrets 12 → 5, IPA 26 → 21, non-Flutter unchanged |
 | F32 | Drop known Flutter identifiers from secrets | 🟡 | 2026-10-26 | In MobSF#2737: snapshot hash skipped where it appears as the snapshot header. Build-path IDs left out (test-environment artifact) |
-| F33 | Ignore fixed plugin constants | 🟡 | 2026-10-26 | Built, queued (`upstream-prs/queue/02`, branch `fix/flutter-plugin-constants`): exact `flutter_secure_storage` / `shared_preferences` base64 constants skipped (plugin code is R8-minified, so path skips don't work). APK 12 → 8 alone, 12 → 1 with #2737 |
+| F33 | Ignore fixed plugin constants | 🟡 | 2026-10-28 | Built, queued (`upstream-prs/queue/02`, branch `fix/flutter-plugin-constants`): exact `flutter_secure_storage` / `shared_preferences` base64 constants skipped (plugin code is R8-minified, so path skips don't work). APK 12 → 8 alone, 12 → 1 with #2737. Rebased onto current upstream `5604f608` (2026-10-28), lint + 3 tests pass; next to open now a slot freed |
 | F34 | Native libs analysed twice (`apktool_out/`) | 🟡 | 2026-10-26 | Cause: apktool copies `lib/` to `apktool_out/`, `library_analysis()` globs the whole upload dir. Built, queued (`upstream-prs/queue/04`, branch `fix/skip-apktool-copies`): MobSF sample APK 14 → 7 entries, Flutter APK 16 → 8. Same bug fixed in the fork's Flutter walk (PR #15, merged) |
 | F35 | Swift private symbol hashes reported as secrets | 🟡 | 2026-10-26 | Built, queued (`upstream-prs/queue/03`, branch `fix/swift-symbol-secrets`): Swift symbol names skipped before the entropy check. IPA 26 → 6 alone; with #2737 + queue 02: APK 12 → 1, IPA 26 → 1. Conflicts with queue 02 (resolution tested) |
 
@@ -190,3 +190,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-27 | F16: Dart rule `dart_logging_sensitive` (sensitive values logged with print/debugPrint, warning). F36 added to Phase 4 for the runtime log check |
 | 2026-10-27 | F28: `flutter_diff` command compares two app versions (findings, Dart rules, packages, versions, asset secrets). Checked on corpus builds 3.27.4 → 3.44.9 and 3.0.5 → 3.44.9 (fixed advisories listed) |
 | 2026-10-27 | F22 (part): build-id-based Flutter TLS bypass Frida script + offset generator; hooks `ssl_verify_peer_cert` across 4 engine builds on an Android 13 emulator. Not yet auto-run by MobSF; proxy wiring pending |
+| 2026-10-28 | Fork PR #31 (F22 part) merged (`e462a60c`); side-by-side on master vs branch identical (APK 36, IPA 56, Android ZIP 41, iOS ZIP 34, Flutter ZIP 56). Upstream MobSF#2736 (F30) merged → F30 ✅, 2 upstream PRs left open (#2734, #2737). F33 (queue 02) rebased onto current upstream, lint + tests pass, ready to open |
