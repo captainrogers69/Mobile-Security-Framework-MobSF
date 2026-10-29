@@ -80,6 +80,7 @@ ALLOWED_EXTENSIONS = {
     '.ipa': 'application/octet-stream',
     '.jar': 'application/java-archive',
     '.aar': 'application/octet-stream',
+    '.dex': 'application/octet-stream',
     '.so': 'application/octet-stream',
     '.dylib': 'application/octet-stream',
     '.a': 'application/octet-stream',
@@ -94,6 +95,7 @@ APK_MIME = [
     'binary/octet-stream',
     'application/java-archive',
     'application/x-authorware-bin',
+    'application/x-dex',
 ]
 IPA_MIME = [
     'application/iphone',
@@ -118,7 +120,7 @@ APPX_MIME = [
 # Supported File Extensions
 ANDROID_EXTS = (
     'apk', 'xapk', 'apks', 'zip',
-    'aab', 'so', 'jar', 'aar',
+    'aab', 'so', 'jar', 'aar', 'dex',
 )
 IOS_EXTS = ('ipa', 'dylib', 'a')
 WINDOWS_EXTS = ('appx',)
@@ -342,6 +344,11 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'mobsf.StaticAnalyzer.tools.androguard4': {
+            'handlers': ['console', 'logfile'],
+            'level': 'CRITICAL',
+            'propagate': False,
+        },
         'mobsf.MalwareAnalyzer': {
             'handlers': ['console', 'logfile'],
             'level': 'DEBUG',
@@ -440,7 +447,7 @@ else:
         'org/spongycastle', 'org/bouncycastle',
         'com/amazon/identity/', 'io/fabric/sdk',
         'com/instabug', 'com/crashlytics/android',
-        'kotlinx/', 'kotlin/', 'org/jetbrains/',
+        'kotlinx/', 'kotlin/', 'org/jetbrains/', 'io/flutter/',
     }
     # Disable CVSSV2 Score by default
     CVSS_SCORE_ENABLED = os.getenv('MOBSF_CVSS_SCORE_ENABLED', '0') == '1'
