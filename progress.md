@@ -1,7 +1,7 @@
 # Flutter Security Framework — Progress
 
 Tracks every item in [`requirements.md`](requirements.md). Update the status,
-date and notes as work lands. Last updated: 2026-10-27
+date and notes as work lands. Last updated: 2026-10-29
 
 **Legend:** ✅ done · 🟡 in progress · ⬜ not started · ⛔ blocked · ❓ needs decision
 
@@ -19,7 +19,7 @@ date and notes as work lands. Last updated: 2026-10-27
 | Phase 3 — Source ZIP | 4 | 4 | ✅ |
 | Phase 4 — Dynamic (Android) | 1 | 5 | 🟡 |
 | Phase 5 — Diff, iOS, hardening | 1 | 1 | ✅ |
-| False-positive reduction | 0 | 6 | 🟡 |
+| False-positive reduction | 4 | 6 | 🟡 |
 | Non-functional | 5 | 6 | 🟡 |
 
 ---
@@ -71,7 +71,7 @@ date and notes as work lands. Last updated: 2026-10-27
 | U2 | Small focused PRs from `upstream/master` | ✅ | 2026-10-26 | First merged: MobSF#2730 (Dart strings from `libapp.so`), approved and merged by `ajinabraham` 2026-10-25, all 13 CI checks green (Linux/macOS/Windows). He merged master in and dropped our `tests_elf.py`, kept `elf.py` as written. Earlier: #2721 superseded by his #2724 |
 | U3 | Follow CONTRIBUTING, PR template, CLAUDE.md | ✅ | 2026-10-27 | Standing rule, applied on every PR: PR template, lint + tests pass, CLAUDE.md checklist. Security-relevant fixes: decide public PR vs private advisory (SECURITY.md) before pushing to fork |
 | U4 | GPL-3.0-compatible dependencies only | ✅ | 2026-10-23 | blutter MIT ✅, reFlutter GPL-3.0 ✅, darter AGPL-3.0 ⚠️ (allowed via GPLv3 §13, network clause applies; old Dart only), Doldrums and Guardsquare flutter-re-demo have no license ❌ (reference only). Recommend blutter for F7 |
-| U5 | Fork-only files kept out of upstream PRs | ✅ | 2026-10-27 | Standing rule: upstream branches cut from `upstream/master` (`--no-track`); #2721, #2730, #2734, #2736, #2737 carry no fork-only files. Drafts kept in local `upstream-prs/` (gitignored) |
+| U5 | Fork-only files kept out of upstream PRs | ✅ | 2026-10-27 | Standing rule: upstream branches cut from `upstream/master` (`--no-track`); #2721, #2730, #2734, #2736, #2737, #2742, #2751, #2752 carry no fork-only files. Drafts kept in local `upstream-prs/` (gitignored) |
 | U6 | No breaking output/API/DB changes | ✅ | 2026-10-27 | Flutter is an add-on layer: no change to MobSF's score, DB schema or API parameters. Checked per PR by scanning a plain APK, IPA, Android source ZIP and iOS source ZIP on master and the branch in isolated MobSF homes; reports and scores identical (latest: fork PR #22, 2026-10-27) |
 
 ## Phase 1 — Detection, fingerprinting, strings, reporting
@@ -98,8 +98,8 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | F31 | No secrets/URLs from `libflutter.so` | ✅ | 2026-10-29 | Upstream PR MobSF#2737 **merged** 2026-10-28 (4.6.3, with F32): engine (`libflutter.so`, `Flutter.framework/Flutter`) reports only known-format secrets, Android + iOS paths. APK secrets 12 → 5, IPA 26 → 21, non-Flutter unchanged |
 | F32 | Drop known Flutter identifiers from secrets | ✅ | 2026-10-29 | In MobSF#2737 (**merged** 2026-10-28): snapshot hash skipped where it appears as the snapshot header. Build-path IDs left out (test-environment artifact) |
 | F33 | Ignore fixed plugin constants | ✅ | 2026-10-29 | Upstream PR MobSF#2742 **merged** 2026-10-28 (`4fe59343`): exact `flutter_secure_storage` / `shared_preferences` base64 constants skipped (plugin code is R8-minified, so path skips don't work). APK 12 → 8 alone, 12 → 1 with #2737. (Copilot-bot FN edge-case fix prepared as a follow-up patch) |
-| F34 | Native libs analysed twice (`apktool_out/`) | 🟡 | 2026-10-26 | Cause: apktool copies `lib/` to `apktool_out/`, `library_analysis()` globs the whole upload dir. Built, queued (`upstream-prs/queue/04`, branch `fix/skip-apktool-copies`): MobSF sample APK 14 → 7 entries, Flutter APK 16 → 8. Same bug fixed in the fork's Flutter walk (PR #15, merged) |
-| F35 | Swift private symbol hashes reported as secrets | 🟡 | 2026-10-26 | Built, queued (`upstream-prs/queue/03`, branch `fix/swift-symbol-secrets`): Swift symbol names skipped before the entropy check. IPA 26 → 6 alone; with #2737 + queue 02: APK 12 → 1, IPA 26 → 1. Conflicts with queue 02 (resolution tested) |
+| F34 | Native libs analysed twice (`apktool_out/`) | 🟡 | 2026-10-29 | Upstream PR **MobSF#2752 open** (2026-10-29, review pending). Cause: apktool copies `lib/` to `apktool_out/`, `library_analysis()` globs the whole upload dir; fix skips `apktool_out/`. Rebased onto upstream `3375a12a` and re-measured: MobSF sample APK 14 → 7 entries, Flutter APK (arm64) 4 → 2; secrets, score and `lib/` entries identical. DEX globs (incl. upstream's new DEX analysis #2745) are top-level only, so no sibling fix needed. Same bug fixed in the fork's Flutter walk (PR #15, merged) |
+| F35 | Swift private symbol hashes reported as secrets | 🟡 | 2026-10-29 | Upstream PR **MobSF#2751 open** (2026-10-29, review pending): Swift symbol names removed before the entropy check only; known-format detection still runs on the full string. Flutter IPA 26 → 6 alone; on top of merged #2737 + #2742 the Flutter APK and IPA reach 1 reported secret each (local build-path ID). MobSF sample APK/IPA unchanged |
 
 ## Phase 2 — Dart snapshot analysis, Flutter checks, CLI
 
@@ -194,3 +194,4 @@ Before/after numbers are measured on the real Flutter test APK (no real secrets)
 | 2026-10-28 | F22 ✅ complete: `scripts/flutter_mitm.py` transparent-proxy wiring + live captured-request demo on a Flutter 3.44.9 release APK (mitmproxy decrypts the app's HTTPS with the bypass; handshake fails without it). docs/flutter.md Dynamic section expanded. Phase 4 1/5 |
 | 2026-10-29 | Upstream MobSF#2737 (F31/F32) and #2742 (F33) **merged** (upstream 4.6.3) → F31/F32/F33 ✅. Fork synced with upstream 4.6.3 (clean merge, no conflicts): lint OK, tests no-regression, diff vs pristine upstream is additive Flutter/fork files only (no non-Flutter scan logic changed), smoke scans of APK/IPA/Flutter-ZIP all clean (scores reflect upstream's new score formula #2744). #2734 changes-requested (under review) |
 | 2026-10-29 | F18 reworked to no-move: Flutter source ZIPs detected by standard layout and `android/` scanned in place (no file moving), per MobSF#2734 review. `valid_source_code()` returns the scan dir; `flutter_android_source()` replaces `move_flutter_android()`. Side-by-side vs old fork master IDENTICAL (Flutter ZIP 81, Android src 57, 0 diff); 219 tests pass. Ported to upstream #2734 (pushed, `ecacfaea`) |
+| 2026-10-29 | Upstream MobSF#2751 (F35, Swift symbols) and MobSF#2752 (F34, `apktool_out/` duplicates) opened. F34 rebased onto upstream `3375a12a`: lint OK, full suite same as master, sample APK 14 → 7 binary entries, merges cleanly with #2734 and #2751. 3 upstream PRs open (#2734, #2751, #2752); false-positive fix queue empty |
