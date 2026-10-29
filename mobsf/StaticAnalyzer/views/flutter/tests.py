@@ -2021,34 +2021,50 @@ class FlutterZipSourceTypeTests(SimpleTestCase):
     def test_project_at_zip_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._tree(tmp, FLUTTER_ZIP_TREE)
-            self.assertEqual(self._check(tmp), ('studio', True))
             root = Path(tmp)
+            pro, valid, src = self._check(tmp)
+            self.assertEqual((pro, valid), ('studio', True))
+            # The android/ module is scanned in place; nothing is moved.
+            self.assertEqual(src, root / 'android')
             self.assertTrue(
-                (root / 'app/src/main/AndroidManifest.xml').is_file())
-            # Existing project files are kept, not overwritten
+                (src / 'app/src/main/AndroidManifest.xml').is_file())
+            self.assertTrue((root / 'lib/main.dart').is_file())
             self.assertEqual((root / '.gitignore').read_text(),
                              'flutter-ignore\n')
-            self.assertTrue((root / 'lib/main.dart').is_file())
-            self.assertFalse((root / 'android').exists())
 
     def test_project_wrapped_in_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._tree(Path(tmp) / 'demo', FLUTTER_ZIP_TREE)
-            self.assertEqual(self._check(tmp), ('studio', True))
+            pro, valid, src = self._check(tmp)
+            self.assertEqual((pro, valid), ('studio', True))
+            self.assertEqual(src, Path(tmp) / 'demo' / 'android')
             self.assertTrue(
-                (Path(tmp) / 'app/src/main/AndroidManifest.xml').is_file())
+                (src / 'app/src/main/AndroidManifest.xml').is_file())
+
+    def test_project_wrapped_in_app_folder(self):
+        # A wrapper literally named "app" is harmless with no moving.
+        with tempfile.TemporaryDirectory() as tmp:
+            self._tree(Path(tmp) / 'app', FLUTTER_ZIP_TREE)
+            pro, valid, src = self._check(tmp)
+            self.assertEqual((pro, valid), ('studio', True))
+            self.assertEqual(src, Path(tmp) / 'app' / 'android')
+            self.assertTrue(
+                (src / 'app/src/main/AndroidManifest.xml').is_file())
 
     def test_flutter_project_without_android_shell(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._tree(tmp, {'pubspec.yaml': PUBSPEC, 'lib/main.dart': ''})
-            self.assertEqual(self._check(tmp), ('', False))
+            pro, valid, _src = self._check(tmp)
+            self.assertEqual((pro, valid), ('', False))
 
     def test_plain_android_project_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._tree(tmp, {
                 'app/src/main/AndroidManifest.xml': MANIFEST.format(meta=''),
                 'app/src/main/java/A.java': ''})
-            self.assertEqual(self._check(tmp), ('studio', True))
+            pro, valid, src = self._check(tmp)
+            self.assertEqual((pro, valid), ('studio', True))
+            self.assertEqual(src, Path(tmp))
 
 
 SARIF_RESULT = {
