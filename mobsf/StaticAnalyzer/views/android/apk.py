@@ -412,7 +412,7 @@ def src_analysis(request, app_dic, rescan, api):
         # moves android/ to the ZIP root
         flutter_scan_source(checksum, app_dic['app_dir'])
         # Check if Valid Directory Structure and get ZIP Type
-        pro_type, valid = valid_source_code(
+        pro_type, valid, src_dir = valid_source_code(
             checksum,
             app_dic['app_dir'])
         msg = f'Source code type - {pro_type}'
@@ -432,6 +432,9 @@ def src_analysis(request, app_dic, rescan, api):
                 'Permission Denied',
                 False)
         if valid and (pro_type in ['eclipse', 'studio']):
+            # For a Flutter project this points at the standard android/
+            # module; for other sources it is unchanged.
+            app_dic['app_dir'] = src_dir.as_posix().rstrip('/') + '/'
             if settings.ASYNC_ANALYSIS:
                 return async_analysis(
                     checksum,
@@ -482,29 +485,21 @@ def move_to_parent(inside_path, app_path):
     shutil.rmtree(inside_path)
 
 
-def move_flutter_android(app_path):
-    """Move the Android shell of a Flutter project to the app root.
+def flutter_android_source(app_path):
+    """Return the Android module directory of a Flutter project, or None.
 
-    Files already present at the root (e.g. the Flutter project's
-    .gitignore) are kept; links and special files are skipped.
+    Flutter projects follow a standard layout: a pubspec.yaml at the project
+    root and the Android app as a Gradle/Studio project in android/. This is
+    detected by those markers, like the Eclipse/Studio/iOS source types, and
+    the android/ module is scanned in place — no files are moved.
     """
     root = is_flutter_source(app_path)
     if not root:
-        return None, False
+        return None
     android = root / 'android'
-    if is_pipe_or_link(android):
-        return None, False
-    ide, is_and = is_android_source(android)
-    if not ide:
-        return None, False
-    for item in android.iterdir():
-        target = app_path / item.name
-        if (is_pipe_or_link(item) or target.exists()
-                or target.is_symlink()):
-            continue
-        shutil.move(str(item), str(target))
-    shutil.rmtree(android)
-    return ide, is_and
+    if is_pipe_or_link(android) or not is_android_source(android)[0]:
+        return None
+    return android
 
 
 def valid_source_code(checksum, app_dir):
@@ -518,12 +513,12 @@ def valid_source_code(checksum, app_dir):
         ide, is_and = is_android_source(app_path)
 
         if ide:
-            return ide, is_and
+            return ide, is_and, app_path
 
-        # Flutter project, Android shell in <project>/android
-        ide, is_and = move_flutter_android(app_path)
-        if ide:
-            return ide, is_and
+        # Flutter project: scan its android/ module in place (no move).
+        android = flutter_android_source(app_path)
+        if android:
+            return 'studio', True, android
 
         # Relaxed Android Source check, one level down
         for subdir in app_path.iterdir():
@@ -531,21 +526,22 @@ def valid_source_code(checksum, app_dir):
                 ide, is_and = is_android_source(subdir)
                 if ide:
                     move_to_parent(subdir, app_path)
-                    return ide, is_and
+                    return ide, is_and, app_path
 
         # iOS Source
         xcode = [f for f in app_path.iterdir() if f.suffix == '.xcodeproj']
         if xcode:
-            return 'ios', True
+            return 'ios', True, app_path
 
         # Relaxed iOS Source Check
         for subdir in app_path.iterdir():
             if subdir.is_dir() and subdir.exists():
                 if any(f.suffix == '.xcodeproj' for f in subdir.iterdir()):
-                    return 'ios', True
+                    return 'ios', True, app_path
 
-        return '', False
+        return '', False, app_path
     except Exception as exp:
         msg = 'Error identifying source code type from zip'
         logger.exception(msg)
         append_scan_status(checksum, msg, repr(exp))
+        return '', False, Path(app_dir)
