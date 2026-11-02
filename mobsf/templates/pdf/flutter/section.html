@@ -1,5 +1,5 @@
 {% if flutter and flutter.is_flutter %}
-      <h2><i class="fas fa-feather-alt"></i> FLUTTER ANALYSIS</h2>
+      <h2><span class="fas">&#xf56b;</span>  FLUTTER ANALYSIS</h2>
       {% if flutter.project_root %}
       <h5>Locked packages:</h5> {{ flutter.packages|length }}</br>
       <h5>OSV lookup:</h5> {% if flutter.osv is None %}disabled{% else %}{{ flutter.osv|length }} vulnerable package(s){% endif %}</br>
