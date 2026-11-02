@@ -80,6 +80,7 @@ def index(request):
         'version': settings.MOBSF_VER,
         'mimes': mimes,
         'exts': '|'.join(exts),
+        'async_scans': settings.ASYNC_ANALYSIS,
     }
     template = 'general/home.html'
     return render(request, template, context)
@@ -397,7 +398,7 @@ def file_download(dwd_file, filename, content_type):
             response['Content-Disposition'] = val
         return response
 
-    # Handle SVG files with bleach cleaning to prevent XSS attacks
+    # Handle SVG files with XML allowlist sanitization to prevent XSS attacks
     if dwd_file.suffix == '.svg':
         with open(dwd_file, 'r', encoding='utf-8') as file:
             svg_content = file.read()
@@ -472,7 +473,8 @@ def download(request):
             allowed_exts[ext])
 
     # Special Case for Certain Image Files
-    if filename.endswith(('screen/screen.png', '-icon.png')):
+    if filename.endswith((
+            'screen/screen.png', '-icon.png', '-icon.svg', '-icon.webp')):
         return HttpResponse('')
 
     return HttpResponse(status=HTTP_STATUS_404)
