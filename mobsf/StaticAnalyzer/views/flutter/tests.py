@@ -2292,7 +2292,7 @@ class CLIDatabaseTests(SimpleTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             apk = CLITests()._zip(tmp, ANDROID_APP, 'app.apk')
             with mock.patch(
-                    'mobsf.MobSF.utils.RecentScansDB.objects.only',
+                    'mobsf.StaticAnalyzer.models.RecentScansDB.objects.only',
                     side_effect=OperationalError('no such table')), \
                     self.assertNoLogs('mobsf.MobSF.utils', level='ERROR'):
                 res = scan_path(apk)

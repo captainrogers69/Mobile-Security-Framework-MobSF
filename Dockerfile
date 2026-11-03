@@ -5,8 +5,6 @@ LABEL \
     name="MobSF" \
     author="Ajin Abraham <ajin25@gmail.com>" \
     maintainer="Ajin Abraham <ajin25@gmail.com>" \
-    contributor_1="OscarAkaElvis <oscar.alfonso.diaz@gmail.com>" \
-    contributor_2="Vincent Nadal <vincent.nadal@orange.fr>" \
     description="Mobile Security Framework (MobSF) is an automated, all-in-one mobile application (Android/iOS/Windows) pen-testing, malware analysis and security assessment framework capable of performing static and dynamic analysis."
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -38,20 +36,12 @@ RUN groupadd --gid $USER_ID $MOBSF_USER && \
         android-tools-adb \
         build-essential \
         curl \
-        fontconfig \
-        fontconfig-config \
         git \
-        libfontconfig1 \
-        libjpeg62-turbo \
-        libxext6 \
-        libxrender1 \
         locales \
         python3-dev \
         sqlite3 \
         unzip \
-        wget \
-        xfonts-75dpi \
-        xfonts-base && \
+        wget && \
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
     locale-gen en_US.UTF-8 && \
     update-locale LANG=en_US.UTF-8 && \
